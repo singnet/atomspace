@@ -49,7 +49,7 @@ jobs:
           command: cd build && make -j{{ njobs }} tests
       - run:
           name: Run tests
-          command: cd build && make -j{{ njobs }} test
+          command: cd build && make -j{{ njobs }} test ARGS=-j{{ njobs }}
       - run:
           name: Print test log
           command: cat build/tests/Testing/Temporary/LastTest.log
@@ -96,7 +96,7 @@ jobs:
           command: cd build && make -j{{ njobs }} tests
       - run:
           name: Run tests
-          command: cd build && make -j{{ njobs }} test
+          command: cd build && make -j{{ njobs }} test ARGS=-j{{ njobs }}
       - run:
           name: Print test log
           command: cat build/tests/Testing/Temporary/LastTest.log
