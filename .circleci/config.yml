@@ -40,16 +40,16 @@ jobs:
           command: mkdir build && cd build && cmake ..
       - run:
           name: Build
-          command: cd build && make -j{{ njobs }}
+          command: cd build && make -j${njobs}
       - run:
           name: Install AtomSpace
-          command: cd build && make -j{{ njobs }} install && ldconfig
+          command: cd build && make -j${njobs} install && ldconfig
       - run:
           name: Build tests
-          command: cd build && make -j{{ njobs }} tests
+          command: cd build && make -j${njobs} tests
       - run:
           name: Run tests
-          command: cd build && make -j{{ njobs }} test ARGS=-j{{ njobs }}
+          command: cd build && make -j${njobs} test ARGS=-j${njobs}
       - run:
           name: Print test log
           command: cat build/tests/Testing/Temporary/LastTest.log
@@ -75,10 +75,10 @@ jobs:
           at: /ws
       - run:
           name: Install cogutil
-          command: cd /ws/cogutil/build && make -j{{ njobs }} install && ldconfig
+          command: cd /ws/cogutil/build && make -j${njobs} install && ldconfig
       - run:
           name: Install AtomSpace
-          command: cd /ws/atomspace/build && make -j{{ njobs }} install && ldconfig
+          command: cd /ws/atomspace/build && make -j${njobs} install && ldconfig
       - run:
           name: Clone OpenCog
           command: git clone --depth 1 https://github.com/$ORG/opencog .
@@ -87,16 +87,16 @@ jobs:
           command: mkdir build && cd build && cmake ..
       - run:
           name: Build
-          command: cd build && make -j{{ njobs }}
+          command: cd build && make -j${njobs}
       - run:
           name: Install OpenCog
-          command: cd build && make -j{{ njobs }} install && ldconfig
+          command: cd build && make -j${njobs} install && ldconfig
       - run:
           name: Build tests
-          command: cd build && make -j{{ njobs }} tests
+          command: cd build && make -j${njobs} tests
       - run:
           name: Run tests
-          command: cd build && make -j{{ njobs }} test ARGS=-j{{ njobs }}
+          command: cd build && make -j${njobs} test ARGS=-j${njobs}
       - run:
           name: Print test log
           command: cat build/tests/Testing/Temporary/LastTest.log
