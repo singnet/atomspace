@@ -26,6 +26,7 @@ jobs:
             - ccache-{{ checksum "/tmp/date" }}
             - ccache-
             - ghc-{{checksum "/ws/atomspace/opencog/haskell/stack.yaml"}}
+            - haskelldeps-{{checksum "/ws/atomspace/opencog/haskell/stack.yaml"}}-{{checksum "/ws/atomspace/opencog/haskell/opencog-atomspace.cabal"}}
       - run:
           name: Install cogutil
           command: |
@@ -127,7 +128,10 @@ jobs:
           key: ghc-{{checksum "/ws/atomspace/opencog/haskell/stack.yaml"}}
           paths:
             - /root/.stack
-
+      - save_cache:
+          key: haskelldeps-{{checksum "/ws/atomspace/opencog/haskell/stack.yaml"}}-{{checksum "/ws/atomspace/opencog/haskell/opencog-atomspace.cabal"}}
+          paths:
+            - /ws/atomspace/opencog/haskell/.stack-work
 workflows:
   version: 2
   build-test-package:
