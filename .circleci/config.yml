@@ -25,8 +25,6 @@ jobs:
           keys:
             - ccache-{{ checksum "/tmp/date" }}
             - ccache-
-            - ghc-{{checksum "/ws/atomspace/opencog/haskell/stack.yaml"}}
-            - haskelldeps-{{checksum "/ws/atomspace/opencog/haskell/stack.yaml"}}-{{checksum "/ws/atomspace/opencog/haskell/opencog-atomspace.cabal"}}
       - run:
           name: Install cogutil
           command: |
@@ -35,6 +33,10 @@ jobs:
             cd /ws/cogutil/build && cmake .. && make -j2 && make -j2 install
             ldconfig
       - checkout
+      - restore_cache:
+          keys:
+            - ghc-{{checksum "/ws/atomspace/opencog/haskell/stack.yaml"}}
+            - haskelldeps-{{checksum "/ws/atomspace/opencog/haskell/stack.yaml"}}-{{checksum "/ws/atomspace/opencog/haskell/opencog-atomspace.cabal"}}
       - run:
           name: CMake Configure
           command: mkdir build && cd build && cmake ..
