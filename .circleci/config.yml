@@ -116,6 +116,7 @@ jobs:
             - ws/atomspace/opencog/haskell/.stack-work
             - root/.stack
 
+
   package: #Place holder
     docker:
       - image: opencog/opencog-deps
