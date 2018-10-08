@@ -80,7 +80,7 @@ jobs:
       ORG: singnet
     steps:
       - attach_workspace:
-          at: /ws
+          at: /
       - run:
           name: Install cogutil
           command: cd /ws/cogutil/build && make -j2 install && ldconfig
@@ -123,7 +123,7 @@ jobs:
     working_directory: /ws/atomspace
     steps:
       - attach_workspace:
-          at: /ws/
+          at: /
       - run:
           name: Start storing ccache
           command: date +%d-%m-%Y > /tmp/date
