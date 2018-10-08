@@ -34,9 +34,12 @@ jobs:
             ldconfig
       - checkout
       - restore_cache:
-          name: Restore Haskell Cache
+          name: Restore GCH Cache
           keys:
             - ghc-{{checksum "/ws/atomspace/opencog/haskell/stack.yaml"}}
+      - restore_cache:
+          name: Restore Haskell Deps Cache
+          keys:
             - haskelldeps-{{checksum "/ws/atomspace/opencog/haskell/stack.yaml"}}-{{checksum "/ws/atomspace/opencog/haskell/opencog-atomspace.cabal"}}
       - run:
           name: CMake Configure
