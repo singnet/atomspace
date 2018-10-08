@@ -72,13 +72,11 @@ jobs:
             - /ws/atomspace/opencog/haskell/.stack-work
 
       - persist_to_workspace:
-          root: /
+          root: /ws/
           paths:
-            - ws/cogutil
-            - ws/atomspace
-            - ws/ccache
-            - ws/atomspace/opencog/haskell/.stack-work
-            - root/.stack
+            - cogutil
+            - atomspace
+            - ccache
 
   opencog:
     docker:
@@ -91,7 +89,7 @@ jobs:
       ORG: singnet
     steps:
       - attach_workspace:
-          at: /
+          at: /ws/
       - run:
           name: Install cogutil
           command: cd /ws/cogutil/build && make -j2 install && ldconfig
@@ -121,11 +119,9 @@ jobs:
           command: cat build/tests/Testing/Temporary/LastTest.log
           when: always
       - persist_to_workspace:
-          root: /
+          root: /ws/
           paths:
-            - ws/ccache
-            - ws/atomspace/opencog/haskell/.stack-work
-            - root/.stack
+            - ccache
 
   package: #Place holder
     docker:
@@ -134,7 +130,7 @@ jobs:
     working_directory: /ws/atomspace
     steps:
       - attach_workspace:
-          at: /
+          at: /ws/
       - run:
           name: Start storing ccache
           command: date +%d-%m-%Y > /tmp/date
