@@ -66,6 +66,8 @@ jobs:
             - cogutil
             - atomspace
             - ccache
+            - atomspace/opencog/haskell/.stack-work
+            - ../root/.stack
 
   opencog:
     docker:
@@ -111,6 +113,8 @@ jobs:
           root: /ws/
           paths:
             - ccache
+            - atomspace/opencog/haskell/.stack-work
+            - ../root/.stack
 
   package: #Place holder
     docker:
