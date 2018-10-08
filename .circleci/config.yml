@@ -61,13 +61,13 @@ jobs:
           command: cat build/tests/Testing/Temporary/LastTest.log
           when: always
       - persist_to_workspace:
-          root: /ws/
+          root: /
           paths:
-            - cogutil
-            - atomspace
-            - ccache
-            - atomspace/opencog/haskell/.stack-work
-            - ../root/.stack
+            - ws/cogutil
+            - ws/atomspace
+            - ws/ccache
+            - ws/atomspace/opencog/haskell/.stack-work
+            - root/.stack
 
   opencog:
     docker:
@@ -110,11 +110,11 @@ jobs:
           command: cat build/tests/Testing/Temporary/LastTest.log
           when: always
       - persist_to_workspace:
-          root: /ws/
+          root: /
           paths:
-            - ccache
-            - atomspace/opencog/haskell/.stack-work
-            - ../root/.stack
+            - ws/ccache
+            - ws/atomspace/opencog/haskell/.stack-work
+            - root/.stack
 
   package: #Place holder
     docker:
