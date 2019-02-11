@@ -5,4 +5,4 @@ cdef extern from "opencog/atoms/value/PtrValue.h" namespace "opencog":
     cdef cppclass cPtrValue "opencog::PtrValue":
         void* value() const;
 
-    cdef cValuePtr createPtrValue(...)
+    cdef shared_ptr[cPtrValue] createPtrValue(...)

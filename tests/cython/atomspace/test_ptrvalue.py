@@ -29,7 +29,7 @@ class PtrValueTest(unittest.TestCase):
         key = ConceptNode("key")
         container.set_value(key, PtrValue(obj))
 
-        value = valueToPtrValue(container.get_value(key))
+        value = container.get_value(key)
 
         ref = value.value()
         self.assertEqual(ref.name, "some object")
