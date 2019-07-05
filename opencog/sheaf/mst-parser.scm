@@ -38,12 +38,15 @@
 
 ; ---------------------------------------------------------------------
 
-(define-public (make-score-fn LLOBJ METHOD)
+(define-public (make-score-fn-dist LLOBJ METHOD DIST-MULTS)
 "
   make-score-fn LLOBJ METHOD -- Create a function that returns a
   score for a pair of atoms, the score being given by invoking
   METHOD on LLOBJ.  The LLOBJ must provide the METHOD, of course,
   and also the 'get-pair method, so that pairs can be assembled.
+  The list DIST-MULTS contains multipliers for the score for each
+  possible integer distance between the atoms. For distances longer 
+  than the range of the list, the list's last value is used as multiplier.
 
   If either atom is nil, or if the atom-pair cannot be found, then a
   default value of -1e40 is returned.
@@ -60,8 +63,15 @@
 			(if (and (not (null? left-atom)) (not (null? right-atom)))
 				(LLOBJ 'get-pair left-atom right-atom)
 				'()))
-		(if (null? wpr) bad-mi (LLOBJ METHOD wpr))
+		(define multiplier (list-ref DIST-MULTS (- (min distance (length DIST-MULTS)) 1)))
+
+		(if (null? wpr) bad-mi (* multiplier (LLOBJ METHOD wpr)))
 	)
+)
+
+; backward compatibility for make-score-fn
+(define-public (make-score-fn LLOBJ METHOD)
+	(make-score-fn-dist LLOBJ METHOD '(1))
 )
 
 ; ---------------------------------------------------------------------
