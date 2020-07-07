@@ -70,6 +70,8 @@ ValuePtr LibraryRunner::execute(AtomSpace* as,
                                const Handle& cargs,
                                bool silent)
 {
+	std::cout << "LR execute: cargs: " << cargs->getTruthValue()->to_string() << std::endl;
+
 	// Force execution of the arguments. We have to do this, because
 	// the user-defined functions are black-boxes, and cannot be trusted
 	// to do lazy execution correctly. Right now, forcing is the policy.
@@ -104,6 +106,8 @@ ValuePtr LibraryRunner::evaluate(AtomSpace* as,
                                 const Handle& cargs,
                                 bool silent)
 {
+	std::cout << "LR evaluate: cargs: " << cargs->getTruthValue()->to_string() << std::endl;
+
 	// Force execution of the arguments. We have to do this, because
 	// the user-defined functions are black-boxes, and cannot be trusted
 	// to do lazy execution correctly. Right now, forcing is the policy.

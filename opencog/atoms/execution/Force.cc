@@ -52,6 +52,8 @@ Handle opencog::force_execute(AtomSpace* as, const Handle& cargs, bool silent)
 {
 	Instantiator inst(as);
 
+	std::cout << "force_execute: cargs: " << cargs->getTruthValue()->to_string() << std::endl;
+
 	if (LIST_LINK != cargs->get_type())
 	{
 		Handle args(HandleCast(inst.execute(cargs, silent)));

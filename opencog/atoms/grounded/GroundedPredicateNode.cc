@@ -204,6 +204,8 @@ ValuePtr GroundedPredicateNode::execute(AtomSpace* as,
                                         const Handle& cargs,
                                         bool silent)
 {
+	std::cout << "GPN execute: cargs: " << cargs->getTruthValue()->to_string() << std::endl;
+
 	if (_runner) return _runner->evaluate(as, cargs, silent);
 
 	// XXX FIXME -- can we get rid of the stuff from here on down?

@@ -718,6 +718,8 @@ TruthValuePtr do_eval_with_args(AtomSpace* as,
                                 const HandleSeq& cargs,
                                 bool silent)
 {
+	std::cout << "EvaluationLink: cargs: " << cargs.at(0)->to_string() << std::endl;
+
 	Type pntype = pn->get_type();
 	if (DEFINED_PREDICATE_NODE == pntype)
 	{
