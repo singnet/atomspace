@@ -117,6 +117,7 @@ PatternTermPtr PatternTerm::getOutgoingTerm(Arity pos) const
 bool PatternTerm::isDescendant(const PatternTermPtr& ptm) const
 {
 	if (PatternTerm::UNDEFINED == _parent) return false;
+	if (_parent == ptm) return true;
 	if (*_parent == *ptm) return true;
 	return _parent->isDescendant(ptm);
 }
@@ -390,6 +391,20 @@ std::string oc_to_string(const PatternTermSeq& pts, const std::string& indent)
 	std::string str;
 	size_t i=0;
 	str += "PatternTermSeq has " + std::to_string(pts.size()) + " terms\n";
+	for (const PatternTermPtr& ptm : pts)
+	{
+		str += indent + "term[" + std::to_string(i) + "]:\n";
+		str += ptm->to_full_string(indent + "  ") + "\n";
+		i++;
+	}
+	return str;
+}
+
+std::string oc_to_string(const PatternTermSet& pts, const std::string& indent)
+{
+	std::string str;
+	size_t i=0;
+	str += "PatternTermSet has " + std::to_string(pts.size()) + " terms\n";
 	for (const PatternTermPtr& ptm : pts)
 	{
 		str += indent + "term[" + std::to_string(i) + "]:\n";

@@ -1,4 +1,6 @@
-
+;
+; glob-multi-pivot.scm
+;
 ; multi-pivot version of glob-pivot.scm
 ; 
 ;
@@ -30,7 +32,7 @@
 	(GetLink
 		(TypedVariableLink
 			(GlobNode "$G")
-			(TypeSetLink
+			(TypeIntersectionLink
 				(TypeNode "ConceptNode")
 				(IntervalLink (NumberNode 1) (NumberNode -1))
 			)
@@ -51,7 +53,7 @@
 	(GetLink
 		(TypedVariableLink
 			(GlobNode "$G")
-			(TypeSetLink
+			(TypeIntersectionLink
 				(TypeNode "ConceptNode")
 				(IntervalLink (NumberNode 1) (NumberNode -1))
 			)
@@ -76,7 +78,7 @@
 			(Variable "$cls")
 			(TypedVariableLink
 				(GlobNode "$G")
-				(TypeSetLink
+				(TypeIntersectionLink
 					(TypeNode "ConceptNode")
 					(IntervalLink (NumberNode 1) (NumberNode -1))
 				)
@@ -103,7 +105,7 @@
 	(GetLink
 		(TypedVariableLink
 			(GlobNode "$G")
-			(TypeSetLink
+			(TypeIntersectionLink
 				(TypeNode "ConceptNode")
 				(IntervalLink (NumberNode 1) (NumberNode -1))
 			)
@@ -135,7 +137,7 @@
 			(Variable "$cls")
 			(TypedVariableLink
 				(GlobNode "$G")
-				(TypeSetLink
+				(TypeIntersectionLink
 					(TypeNode "ConceptNode")
 					(IntervalLink (NumberNode 1) (NumberNode -1))
 				)

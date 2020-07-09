@@ -17,10 +17,14 @@
 // https://en.wikipedia.org/wiki/Bottom_type
 NOTYPE
 
+// Supertype, equivalent to the top type of type theory. Every specific
+// type inherits from this type. See
+// https://en.wikipedia.org/wiki/Top_type
+VALUE
+
 // --------------------------------------------------------------
 // Values are collections of data that can be associated with atoms.
 // Think of them as decorations that can be hung on an atom.
-VALUE
 VOID_VALUE <- VALUE     // singleton value holding nothing at all.
 FLOAT_VALUE <- VALUE    // vector of floats, actually.
 STRING_VALUE <- VALUE   // vector of strings
@@ -141,7 +145,7 @@ NUMERIC_LINK <- LINK
 
 // Type-input link.  This link type forces type-checking on it's
 // "inputs" (it's outgoing set): they must be types.
-TYPE_LINK <- LINK
+TYPE_INPUT_LINK <- LINK
 
 // Type-output link. Generates Types upon execution.
 TYPE_OUTPUT_LINK <- LINK
@@ -201,7 +205,7 @@ SEQUENTIAL_OR_LINK <- ORDERED_LINK,CRISP_OUTPUT_LINK,BOOLEAN_LINK
 //
 // This is important for the pattern matcher; you use it to say
 // "match this graph or this graph or this graph". It is
-// crisp-true/false if any of the items on the meu are present.
+// crisp-true/false if any of the items on the menu are present.
 // Compare to RandomChoiceLink below, which randomly selects one
 // entry.
 CHOICE_LINK <- ORDERED_LINK,CRISP_OUTPUT_LINK
@@ -277,9 +281,10 @@ ANY_NODE <- NODE
 CONNECTOR <- ORDERED_LINK
 
 CONNECTOR_DIR_NODE <- LEXICAL_NODE "ConnectorDir" // Connector direction
-LINK_CLASS_NODE <- LEXICAL_NODE "LinkClass" // Connector class
-CONNECTOR_SEQ <- ORDERED_LINK       // Sequence of connectors
-CONNECTOR_SET <- UNORDERED_LINK     // Unordered set of connectors
+BOND_NODE <- LEXICAL_NODE "Bond"    // A connection type name.
+CONNECTOR_SEQ <- ORDERED_LINK       // Conjoined sequence of connectors
+CONNECTOR_SET <- UNORDERED_LINK     // Unordered conjunction of connectors
+CONNECTOR_CHOICE <- CHOICE_LINK     // Disjoined set of connectors
 SECTION <- ORDERED_LINK             // Sheaf section, connector set
 
 // ====================================================================
@@ -307,10 +312,8 @@ VARIABLE_LIST <- CONNECTOR_SEQ
 VARIABLE_SET <- CONNECTOR_SET
 
 // A non-greedy globbing variable; matches one or more atoms in a
-// sequence.  XXX TODO - this could be changed to a link, so that
-// it resembles a FUZZY_LINK more closely?  FuzzyLink implements
-// the same idea, but in a more general fashion...
-// https://wiki.opencog.org/w/GlobNode for more.
+// sequence. All this really does is to name a variable, such that
+// the default type cnstructor for it will accept multiple matches.
 GLOB_NODE <- VARIABLE_NODE
 
 // Everything under a QuoteLink is interpreted literally. Variable
@@ -503,7 +506,7 @@ EVALUATION_LINK <- FREE_LINK,EVALUATABLE_LINK
 // because compound types are Atoms, and this is a Node, not a Link,
 // and so it cannot hold any atoms. Use DefinedTypeNode for compound
 // types. Its a LexicalNode, whose lexis consists of Atom types.
-TYPE_NODE <- LEXICAL_NODE
+TYPE_NODE <- BOND_NODE
 
 // Non-strict versions of above. See the wiki.
 TYPE_INH_NODE <- TYPE_NODE
@@ -518,23 +521,26 @@ DEFINED_TYPE_NODE <- TYPE_NODE
 // Note that the empty type choice corresponds to the bottom type.
 // see, https://wiki.opencog.org/w/TypeChoice#Bottom_type
 //
-// This "should" inherit from TYPE_LINK. However, it is currently valid
+// This "should" inherit from TYPE_INPUT_LINK. However, it is currently valid
 // to write `(TypeChoice (Type 'ConceptNode) (Predicate "foo"))` and the
 // `(Predicate "foo")` causes the type checker to fail. Maybe the spec
 // should be changed to only allow
 // `(TypeChoice (Type 'ConceptNode) (Signature (Predicate "foo")))` if
 // such a "constant" type is wanted. I dunno. Not sure. Changing this
-// causes DeepTypeUTest to fail. ... I think forcing use of Signature
-// seems "more correct" ... XXX FIXME. maybe?
-// TYPE_CHOICE <- CHOICE_LINK,TYPE_OUTPUT_LINK,TYPE_LINK
+// causes DeepTypeUTest to fail. ... Forcing use of Signature is "more
+// correct", but clunkier to the user, so we don't force it.
+// TYPE_CHOICE <- CHOICE_LINK,TYPE_OUTPUT_LINK,TYPE_INPUT_LINK
+// See https://en.wikipedia.org/wiki/Union_type
 TYPE_CHOICE <- CHOICE_LINK,TYPE_OUTPUT_LINK
 
-// Type constructor. Forces a boolean-and of all of the type definitions
-// (signatures) that it contains.  Mostly useful only when used with
-// the IntervalLink, so specify the length of a list or the size of a
-// set.  This, in turn, is mostly useful only for regex matching using
-// the GlobNode.
-TYPE_SET_LINK <- SET_LINK,TYPE_OUTPUT_LINK,TYPE_LINK
+// Type constructor. Forces a set-intersection of all of the type
+// definitions (signatures) that it contains. Useful for computing
+// type intersections during type unification. Also heavily used for
+// specifying a compound of the IntervalLink and a simple type, which
+// is used heavily to specify GlobNode types. Inherits from TypeChoice,
+// because the C++ class needs to hold all the same members.
+// See https://en.wikipedia.org/wiki/Intersection_type
+TYPE_INTERSECTION_LINK <- TYPE_CHOICE
 
 // Function-type constructor.  Corresponds to right-arrow of functional
 // programming languages, viz. arity-2, first arg is input, 2nd
@@ -549,13 +555,6 @@ ARROW_LINK <- CONNECTOR_SEQ,TYPE_OUTPUT_LINK
 // type specification, below. It is a Connector, as it specifies
 // only one connectable thing at a time.
 SIGNATURE_LINK <- CONNECTOR,TYPE_OUTPUT_LINK
-
-// The FuzzyLink is a kind of type specification that can be imprecise.
-// It is used to specify a pattern that is then matched only
-// approximately by the pattern matcher, to find "similar" graphs.
-// See also GlobNode, which performs a more narrow kind of matching.
-// (viz. bunch-in-a-row globbing)
-FUZZY_LINK <- SIGNATURE_LINK
 
 // A type binder: it binds a type to a VariableNode. Always arity-2,
 // the first position must be a VariableNode, the second must be a type.
