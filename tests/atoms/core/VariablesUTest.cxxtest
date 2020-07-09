@@ -63,12 +63,12 @@ public:
 		LTI = an(TYPE_INH_NODE, "Link");
 	}
 
-	void test_extend_1();
-	void test_extend_2();
-	void test_extend_3();
-	void test_extend_4();
-	void test_extend_5();
-	void test_extend_6();
+	void test_extend_intersect_1();
+	void test_extend_intersect_2();
+	void test_extend_intersect_3();
+	void test_extend_intersect_4();
+	void test_extend_intersect_5();
+	void test_extend_intersect_6();
 
 	void test_find_variables_ordered_1();
 	void test_find_variables_ordered_2();
@@ -99,7 +99,7 @@ public:
 	void test_substitute_nocheck_scope();
 };
 
-void VariablesUTest::test_extend_1()
+void VariablesUTest::test_extend_intersect_1()
 {
 	logger().info("BEGIN TEST: %s", __FUNCTION__);
 
@@ -112,11 +112,9 @@ void VariablesUTest::test_extend_1()
 		            al(TYPED_VARIABLE_LINK, X, PNT),
 		            al(TYPED_VARIABLE_LINK, Y, CNT));
 
-	VariableList vl1(vardecl1), vl2(vardecl2);
+	Variables v1(vardecl1), v2(vardecl2);
 
-	Variables v1(vl1.get_variables()), v2(vl2.get_variables());
-
-	v1.extend(v2);
+	v1.extend_intersect(v2);
 
 	Handle result = _as.add_atom(v1.get_vardecl());
 
@@ -128,7 +126,7 @@ void VariablesUTest::test_extend_1()
 	logger().info("END TEST: %s", __FUNCTION__);
 }
 
-void VariablesUTest::test_extend_2()
+void VariablesUTest::test_extend_intersect_2()
 {
 	logger().info("BEGIN TEST: %s", __FUNCTION__);
 
@@ -143,11 +141,9 @@ void VariablesUTest::test_extend_2()
 		            al(TYPED_VARIABLE_LINK, X, al(TYPE_CHOICE)),
 		            al(TYPED_VARIABLE_LINK, Y, CNT));
 
-	VariableList vl1(vardecl1), vl2(vardecl2);
+	Variables v1(vardecl1), v2(vardecl2);
 
-	Variables v1(vl1.get_variables()), v2(vl2.get_variables());
-
-	v1.extend(v2);
+	v1.extend_intersect(v2);
 
 	Handle result = _as.add_atom(v1.get_vardecl());
 
@@ -159,7 +155,7 @@ void VariablesUTest::test_extend_2()
 	logger().info("END TEST: %s", __FUNCTION__);
 }
 
-void VariablesUTest::test_extend_3()
+void VariablesUTest::test_extend_intersect_3()
 {
 	logger().info("BEGIN TEST: %s", __FUNCTION__);
 
@@ -174,11 +170,9 @@ void VariablesUTest::test_extend_3()
 			            al(TYPED_VARIABLE_LINK, X, PNT),
 			            al(TYPED_VARIABLE_LINK, Y, CNT));
 
-	VariableList vl1(vardecl1), vl2(vardecl2);
+	Variables v1(vardecl1), v2(vardecl2);
 
-	Variables v1(vl1.get_variables()), v2(vl2.get_variables());
-
-	v1.extend(v2);
+	v1.extend_intersect(v2);
 
 	Handle result = _as.add_atom(v1.get_vardecl());
 
@@ -190,7 +184,7 @@ void VariablesUTest::test_extend_3()
 	logger().info("END TEST: %s", __FUNCTION__);
 }
 
-void VariablesUTest::test_extend_4()
+void VariablesUTest::test_extend_intersect_4()
 {
 	logger().info("BEGIN TEST: %s", __FUNCTION__);
 
@@ -205,11 +199,9 @@ void VariablesUTest::test_extend_4()
 			            al(TYPED_VARIABLE_LINK, X, al(TYPE_CHOICE, CNT, LLT)),
 			            al(TYPED_VARIABLE_LINK, Y, NT));
 
-	VariableList vl1(vardecl1), vl2(vardecl2);
+	Variables v1(vardecl1), v2(vardecl2);
 
-	Variables v1(vl1.get_variables()), v2(vl2.get_variables());
-
-	v1.extend(v2);
+	v1.extend_intersect(v2);
 
 	Handle result = _as.add_atom(v1.get_vardecl());
 
@@ -221,55 +213,53 @@ void VariablesUTest::test_extend_4()
 	logger().info("END TEST: %s", __FUNCTION__);
 }
 
-void VariablesUTest::test_extend_5()
+void VariablesUTest::test_extend_intersect_5()
 {
 	logger().info("BEGIN TEST: %s", __FUNCTION__);
 
 	Handle vardecl1 = al(VARIABLE_LIST,
 	                    al(TYPED_VARIABLE_LINK, G1,
-	                       al(TYPE_SET_LINK,
+	                       al(TYPE_INTERSECTION_LINK,
 	                          al(INTERVAL_LINK,
 	                             an(NUMBER_NODE, "0"),
 	                             an(NUMBER_NODE, "2")),
 	                          NTI)),
 	                    al(TYPED_VARIABLE_LINK, G2,
-	                       al(TYPE_SET_LINK,
+	                       al(TYPE_INTERSECTION_LINK,
 	                          al(INTERVAL_LINK,
 	                             an(NUMBER_NODE, "0"),
 	                             an(NUMBER_NODE, "2")),
 	                          PNT))),
 			vardecl2 = al(VARIABLE_LIST,
 			              al(TYPED_VARIABLE_LINK, G1,
-			                 al(TYPE_SET_LINK,
+			                 al(TYPE_INTERSECTION_LINK,
 			                    al(INTERVAL_LINK,
 			                       an(NUMBER_NODE, "1"),
 			                       an(NUMBER_NODE, "-1")),
 			                    PNT)),
 			              al(TYPED_VARIABLE_LINK, G2,
-			                 al(TYPE_SET_LINK,
+			                 al(TYPE_INTERSECTION_LINK,
 			                    al(INTERVAL_LINK,
 			                       an(NUMBER_NODE, "1"),
 			                       an(NUMBER_NODE, "3")),
 			                    PNT))),
 			expect = al(VARIABLE_LIST,
 			            al(TYPED_VARIABLE_LINK, G1,
-			               al(TYPE_SET_LINK,
+			               al(TYPE_INTERSECTION_LINK,
 			                  al(INTERVAL_LINK,
 			                     an(NUMBER_NODE, "1"),
 			                     an(NUMBER_NODE, "2")),
 			                  PNT)),
 			            al(TYPED_VARIABLE_LINK, G2,
-			               al(TYPE_SET_LINK,
+			               al(TYPE_INTERSECTION_LINK,
 			                  al(INTERVAL_LINK,
 			                     an(NUMBER_NODE, "1"),
 			                     an(NUMBER_NODE, "2")),
 			                  PNT)));
 
-	VariableList vl1(vardecl1), vl2(vardecl2);
+	Variables v1(vardecl1), v2(vardecl2);
 
-	Variables v1(vl1.get_variables()), v2(vl2.get_variables());
-
-	v1.extend(v2);
+	v1.extend_intersect(v2);
 
 	Handle result = _as.add_atom(v1.get_vardecl());
 
@@ -281,7 +271,7 @@ void VariablesUTest::test_extend_5()
 	logger().info("END TEST: %s", __FUNCTION__);
 }
 
-void VariablesUTest::test_extend_6()
+void VariablesUTest::test_extend_intersect_6()
 {
 	logger().info("BEGIN TEST: %s", __FUNCTION__);
 
@@ -295,11 +285,9 @@ void VariablesUTest::test_extend_6()
 			            al(TYPED_VARIABLE_LINK, X, PNT),
 			            al(TYPED_VARIABLE_LINK, G2, PNT));
 
-	VariableList vl1(vardecl1), vl2(vardecl2);
+	Variables v1(vardecl1), v2(vardecl2);
 
-	Variables v1(vl1.get_variables()), v2(vl2.get_variables());
-
-	v1.extend(v2);
+	v1.extend_intersect(v2);
 
 	Handle result = _as.add_atom(v1.get_vardecl());
 
@@ -874,13 +862,13 @@ void VariablesUTest::test_is_type_2()
 
 	Handle vardecl = al(VARIABLE_LIST,
 	                    al(TYPED_VARIABLE_LINK, G1,
-	                       al(TYPE_SET_LINK,
+	                       al(TYPE_INTERSECTION_LINK,
 	                          al(INTERVAL_LINK,
 	                             an(NUMBER_NODE, "0"),
 	                             an(NUMBER_NODE, "1")),
 	                          CNT)),
 	                    al(TYPED_VARIABLE_LINK, G2,
-	                       al(TYPE_SET_LINK,
+	                       al(TYPE_INTERSECTION_LINK,
 	                          al(INTERVAL_LINK,
 	                             an(NUMBER_NODE, "0"),
 	                             an(NUMBER_NODE, "2")),
@@ -904,7 +892,7 @@ void VariablesUTest::test_is_type_3()
 	Handle vardecl = al(VARIABLE_LIST,
 	                    al(TYPED_VARIABLE_LINK, G1, CNT),
 	                    al(TYPED_VARIABLE_LINK, G2,
-	                       al(TYPE_SET_LINK,
+	                       al(TYPE_INTERSECTION_LINK,
 	                          al(INTERVAL_LINK,
 	                             an(NUMBER_NODE, "0"),
 	                             an(NUMBER_NODE, "2")),
@@ -927,13 +915,13 @@ void VariablesUTest::test_is_type_4()
 
 	Handle vardecl = al(VARIABLE_LIST,
 	                    al(TYPED_VARIABLE_LINK, G1,
-	                       al(TYPE_SET_LINK,
+	                       al(TYPE_INTERSECTION_LINK,
 	                          al(INTERVAL_LINK,
 	                             an(NUMBER_NODE, "1"),
 	                             an(NUMBER_NODE, "1")),
 	                          CNT)),
 	                    al(TYPED_VARIABLE_LINK, G2,
-	                       al(TYPE_SET_LINK,
+	                       al(TYPE_INTERSECTION_LINK,
 	                          al(INTERVAL_LINK,
 	                             an(NUMBER_NODE, "1"),
 	                             an(NUMBER_NODE, "1")),

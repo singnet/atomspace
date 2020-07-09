@@ -92,9 +92,9 @@ void PatternLink::common_init(void)
 	if (1 == _num_comps)
 	   make_connectivity_map();
 
-	get_clause_variables(_pat.pmandatory);
-	get_clause_variables(_pat.absents);
-	get_clause_variables(_pat.always);
+	clauses_get_variables(_pat.pmandatory);
+	clauses_get_variables(_pat.absents);
+	clauses_get_variables(_pat.always);
 
 	// Find prunable terms.
 	locate_cacheable(_pat.pmandatory);
@@ -231,8 +231,8 @@ PatternLink::PatternLink(const HandleSet& vars,
 	make_connectivity_map();
 	_pat.redex_name = "Unpacked component of a virtual link";
 
-	get_clause_variables(_pat.pmandatory);
-	get_clause_variables(_pat.absents);
+	clauses_get_variables(_pat.pmandatory);
+	clauses_get_variables(_pat.absents);
 }
 
 /* ================================================================= */
@@ -295,19 +295,21 @@ PatternLink::PatternLink(const HandleSeq&& hseq, Type t)
 /// Any evaluatable terms appearing in these clauses are NOT evaluated,
 /// but are taken as a request to search for and ground these terms in
 /// the form they are given, in their literal form, without evaluation.
-bool PatternLink::record_literal(const Handle& h, bool reverse)
+bool PatternLink::record_literal(const PatternTermPtr& clause, bool reverse)
 {
+	const Handle& h = clause->getHandle();
 	Type typ = h->get_type();
 
 	// Pull clauses out of a PresentLink
 	if ((not reverse and PRESENT_LINK == typ) or
 	    (reverse and ABSENT_LINK == typ))
 	{
-		for (const Handle& ph : h->getOutgoingSet())
+		for (const PatternTermPtr& term : clause->getOutgoingSet())
 		{
+			const Handle& ph = term->getHandle();
 			if (is_constant(_variables.varset, ph)) continue;
 
-			PatternTermPtr term(make_term_tree(ph));
+			pin_term(term);
 			term->markLiteral();
 			_pat.pmandatory.push_back(term);
 		}
@@ -324,30 +326,38 @@ bool PatternLink::record_literal(const Handle& h, bool reverse)
 		// choice at all. Unwrap and discard.
 		if (1 == h->get_arity())
 		{
+			const PatternTermPtr& term(clause->getOutgoingTerm(0));
 			const Handle& ph = h->getOutgoingAtom(0);
 			Type pht = ph->get_type();
 			if (PRESENT_LINK == pht)
 			{
-				for (const Handle& php : ph->getOutgoingSet())
+				for (const PatternTermPtr& sptm : term->getOutgoingSet())
 				{
+					const Handle& php = sptm->getHandle();
 					if (is_constant(_variables.varset, php)) continue;
-					PatternTermPtr term(make_term_tree(php));
-					term->markLiteral();
-					_pat.pmandatory.push_back(term);
+					pin_term(sptm);
+					sptm->markLiteral();
+					_pat.pmandatory.push_back(sptm);
 				}
 			}
 			else if (not is_constant(_variables.varset, ph))
 			{
-				PatternTermPtr term(make_term_tree(ph));
+				pin_term(term);
 				term->markLiteral();
 				_pat.pmandatory.push_back(term);
 			}
 			return true;
 		}
 
-		PatternTermPtr term(make_term_tree(h));
-		term->markChoice();
-		_pat.pmandatory.push_back(term);
+		// Each of the choices must be findable by the pattern engine.
+		for (const PatternTermPtr& term : clause->getOutgoingSet())
+		{
+			pin_term(term);
+			get_clause_variables(term);
+		}
+
+		clause->markChoice();
+		_pat.pmandatory.push_back(clause);
 		return true;
 	}
 
@@ -365,7 +375,8 @@ bool PatternLink::record_literal(const Handle& h, bool reverse)
 		const Handle& inv(h->getOutgoingAtom(0));
 		if (is_constant(_variables.varset, inv)) return true;
 
-		PatternTermPtr term(make_term_tree(inv));
+		const PatternTermPtr& term(clause->getOutgoingTerm(0));
+		pin_term(term);
 		term->markLiteral();
 		term->markAbsent();
 		_pat.absents.push_back(term);
@@ -380,10 +391,11 @@ bool PatternLink::record_literal(const Handle& h, bool reverse)
 	if (not reverse and ALWAYS_LINK == typ)
 	    // or (reverse and NEVER_LINK == typ))
 	{
-		for (const Handle& ah: h->getOutgoingSet())
+		for (PatternTermPtr term: clause->getOutgoingSet())
 		{
+			const Handle& ah = term->getQuote();
 			if (is_constant(_variables.varset, ah)) continue;
-			PatternTermPtr term(make_term_tree(ah));
+			pin_term(term);
 			term->markAlways();
 			_pat.always.push_back(term);
 		}
@@ -418,7 +430,7 @@ bool PatternLink::record_literal(const Handle& h, bool reverse)
 /// but these are not currently supported in this code base. Supporting
 /// probably requires a "LinearLogicPatternLink" which will borrow much
 /// of the code below, but not all, and work with a LinearTermMixin
-/// callback class to complete the matchig process.
+/// callback class to complete the matching process.
 void PatternLink::unbundle_clauses(const Handle& hbody)
 {
 	_pat.body = hbody;
@@ -437,15 +449,15 @@ void PatternLink::unbundle_clauses(const Handle& hbody)
 
 		for (const Handle& ho : dedupe)
 		{
+			PatternTermPtr clause(make_term_tree(ho));
 			if (not is_constant(_variables.varset, ho) and
-			    not record_literal(ho) and
-			    not unbundle_clauses_rec(ho, connectives))
+			    not record_literal(clause) and
+			    not unbundle_clauses_rec(clause, connectives))
 			{
-				PatternTermPtr term(make_term_tree(ho));
-				_pat.pmandatory.push_back(term);
+				_pat.pmandatory.push_back(clause);
 
-				if (not term->isVirtual())
-					_fixed.emplace_back(term);
+				if (not clause->isVirtual())
+					_fixed.emplace_back(clause);
 			}
 		}
 		return;
@@ -453,7 +465,8 @@ void PatternLink::unbundle_clauses(const Handle& hbody)
 
 	// Fish out the PresentLink's, and add them to the
 	// list of clauses to be grounded.
-	if (record_literal(hbody))
+	PatternTermPtr clause(make_term_tree(hbody));
+	if (record_literal(clause))
 		return;
 
 	TypeSet connectives({AND_LINK, SEQUENTIAL_AND_LINK,
@@ -465,14 +478,13 @@ void PatternLink::unbundle_clauses(const Handle& hbody)
 	// the PresentLink is reached. Whereas the current design
 	// of the clause-walking will run the PresentLink before
 	// running the sequential. So that's a bug.
-	if (not unbundle_clauses_rec(hbody, connectives) and
+	if (not unbundle_clauses_rec(clause, connectives) and
 	    not is_constant(_variables.varset, hbody))
 	{
-		PatternTermPtr term(make_term_tree(hbody));
-		_pat.pmandatory.push_back(term);
+		_pat.pmandatory.push_back(clause);
 
-		if (not term->isVirtual())
-			_fixed.emplace_back(term);
+		if (not clause->isVirtual())
+			_fixed.emplace_back(clause);
 	}
 }
 
@@ -495,10 +507,11 @@ void PatternLink::unbundle_clauses(const Handle& hbody)
 ///   as the predicate) are evaluatable, and cannot be treated as
 ///   Present.
 ///
-bool PatternLink::unbundle_clauses_rec(const Handle& bdy,
+bool PatternLink::unbundle_clauses_rec(const PatternTermPtr& term,
                                        const TypeSet& connectives,
                                        bool reverse)
 {
+	const Handle& bdy = term->getHandle();
 	Type t = bdy->get_type();
 
 	if (connectives.find(t) == connectives.end())
@@ -507,10 +520,10 @@ bool PatternLink::unbundle_clauses_rec(const Handle& bdy,
 	if (NOT_LINK == t) reverse = not reverse;
 
 	bool recorded = true;
-	for (const Handle& ho : bdy->getOutgoingSet())
+	for (const PatternTermPtr& pto : term->getOutgoingSet())
 	{
-		if (record_literal(ho, reverse)) continue;
-		if (unbundle_clauses_rec(ho, connectives, reverse)) continue;
+		if (record_literal(pto, reverse)) continue;
+		if (unbundle_clauses_rec(pto, connectives, reverse)) continue;
 
 		recorded = false;
 	}
@@ -580,26 +593,30 @@ void PatternLink::locate_cacheable(const PatternTermSeq& clauses)
 
 /* ================================================================= */
 
-/// get_clause_variables -- for every clause, record the variables in it.
+/// get_clause_variables -- Make note of the variables in this term.
 /// This is used at runtime, to determine if the clause has been fully
 /// grounded (or not).
-void PatternLink::get_clause_variables(const PatternTermSeq& clauses)
+void PatternLink::get_clause_variables(const PatternTermPtr& ptm)
+{
+	const Handle& hcl = ptm->getHandle();
+	HandleSet vset = get_free_variables(hcl);
+
+	// Put them into a sequence; any fixed sequence will do.
+	HandleSeq vseq;
+	for (const Handle& v: vset)
+	{
+		if (_variables.varset.end() != _variables.varset.find(v))
+			vseq.emplace_back(v);
+	}
+
+	_pat.clause_variables.insert({ptm, vseq});
+}
+
+/// get_clause_variables -- for every clause, record the variables in it.
+void PatternLink::clauses_get_variables(const PatternTermSeq& clauses)
 {
 	for (const PatternTermPtr& ptm : clauses)
-	{
-		const Handle& hcl = ptm->getHandle();
-		HandleSet vset = get_free_variables(hcl);
-
-		// Put them into a sequence; any fixed sequence will do.
-		HandleSeq vseq;
-		for (const Handle& v: vset)
-		{
-			if (_variables.varset.end() != _variables.varset.find(v))
-				vseq.emplace_back(v);
-		}
-
-		_pat.clause_variables.insert({ptm, vseq});
-	}
+		get_clause_variables(ptm);
 }
 
 /* ================================================================= */
@@ -815,6 +832,26 @@ PatternTermPtr PatternLink::make_term_tree(const Handle& term)
 	return root_term;
 }
 
+// Temporary helper function (under construction)
+static inline bool can_eval_or_present(const Handle& h)
+{
+	return can_evaluate(h) or PRESENT_LINK == h->get_type();
+}
+
+void PatternLink::pin_term(const PatternTermPtr& ptm)
+{
+	pin_term_recursive(ptm, ptm);
+}
+
+void PatternLink::pin_term_recursive(const PatternTermPtr& ptm,
+                                     const PatternTermPtr& root)
+{
+	Handle h(ptm->getHandle());
+	_pat.connected_terms_map[{h, root}].emplace_back(ptm);
+	for (const PatternTermPtr& stm : ptm->getOutgoingSet())
+		pin_term_recursive(stm, root);
+}
+
 void PatternLink::make_term_tree_recursive(const PatternTermPtr& root,
                                            PatternTermPtr& ptm)
 {
@@ -858,7 +895,7 @@ void PatternLink::make_term_tree_recursive(const PatternTermPtr& root,
 		if (AND_LINK == t)
 		{
 			for (const Handle& ho : h->getOutgoingSet())
-				if (not can_evaluate(ho))
+				if (not can_eval_or_present(ho))
 				{
 					is_ev = false;
 					break;
@@ -926,7 +963,7 @@ void PatternLink::make_term_tree_recursive(const PatternTermPtr& root,
 		if (AND_LINK == t)
 		{
 			for (const PatternTermPtr& ptc : ptm->getOutgoingSet())
-				if (ptc->isQuoted() or not can_evaluate(ptc->getHandle()))
+				if (ptc->isQuoted() or not can_eval_or_present(ptc->getHandle()))
 				{
 					ptm->markLiteral();
 					return;

@@ -25,6 +25,7 @@
 #include <opencog/atoms/base/Link.h>
 #include <opencog/atoms/atom_types/NameServer.h>
 
+#include <opencog/atoms/core/TypeChoice.h>
 #include <opencog/atoms/core/TypeNode.h>
 #include <opencog/atoms/core/DefineLink.h>
 #include <opencog/atoms/core/VariableList.h>
@@ -38,7 +39,7 @@ namespace opencog {
 
 /* ================================================================= */
 /**
- * Type checker.  Returns true if `val` is of type `deep`.
+ * Type checker.  Returns true if `val` is of type `spec`.
  */
 bool value_is_type(const Handle& spec, const ValuePtr& val)
 {
@@ -79,18 +80,9 @@ bool value_is_type(const Handle& spec, const ValuePtr& val)
 		Type deeptype = TypeNodeCast(deep)->get_kind();
 		return nameserver().isA(deeptype, valtype);
 	}
-	else if (TYPE_CHOICE == dpt)
+	else if (nameserver().isA(dpt, TYPE_CHOICE))
 	{
-		for (const Handle& choice : deep->getOutgoingSet())
-		{
-			if (value_is_type(choice, val)) return true;
-		}
-		return false;
-	}
-	else if (FUZZY_LINK == dpt)
-	{
-		throw RuntimeException(TRACE_INFO,
-			"Not implemented! TODO XXX FIXME");
+		return TypeChoiceCast(deep)->is_type(val);
 	}
 
 	// If it is not a link, then it is a type-constant,
@@ -204,7 +196,7 @@ static bool type_match_rec(const Handle& left_,
 		rtype = right->get_type();
 	}
 
-	// Exact matchees are always good.
+	// Exact matches are always good.
 	if (left == right) return true;
 
 	// If left is a core type, right must be that type
@@ -352,40 +344,6 @@ bool is_well_typed(const TypeSet& ts)
 		if (not is_well_typed(t))
 			return false;
 	return true;
-}
-
-VariableSetPtr gen_variable_set(const Handle& h)
-{
-	HandleSet vars = get_free_variables(h);
-	return createVariableSet(HandleSeq(vars.begin(), vars.end()));
-}
-
-Handle gen_vardecl(const Handle& h)
-{
-	return Handle(gen_variable_set(h));
-}
-
-Variables gen_variables(const Handle& h, const Handle& vardecl)
-{
-	if (vardecl)
-		return Variables(vardecl);
-	return gen_variable_set(h)->get_variables();
-}
-
-Handle gen_vardecl(const Handle& h, const Handle& vardecl)
-{
-	if (not vardecl)
-		return gen_vardecl(h);
-	return vardecl;
-}
-
-Handle gen_vardecl(const HandleSeq&& varlist, bool ordered)
-{
-	if (1 == varlist.size())
-		return varlist[0];
-	else
-		return ordered ? Handle(createVariableList(std::move(varlist)))
-			: Handle(createVariableSet(std::move(varlist)));
 }
 
 } // ~namespace opencog
