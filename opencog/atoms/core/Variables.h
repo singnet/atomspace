@@ -26,8 +26,6 @@
 #include <map>
 #include <set>
 
-#include <boost/operators.hpp>
-
 #include <opencog/util/empty_string.h>
 #include <opencog/atoms/base/Handle.h>
 #include <opencog/atoms/base/Atom.h>
@@ -41,10 +39,6 @@ namespace opencog
  */
 
 typedef std::map<Handle, TypedVariableLinkPtr> VariableTypeMap;
-typedef std::map<Handle, TypeSet> VariableSimpleTypeMap;
-typedef std::map<Handle, HandleSet> VariableDeepTypeMap;
-typedef std::pair<size_t, size_t> GlobInterval;
-typedef std::map<Handle, GlobInterval> GlobIntervalMap;
 
 /// The Variables struct defines a list of typed variables "unbundled"
 /// from the hypergraph in which they normally occur. The goal of this
@@ -55,8 +49,7 @@ typedef std::map<Handle, GlobInterval> GlobIntervalMap;
 /// scoped, bound variables; in particular, it is heavily used by the
 /// pattern matcher.
 ///
-struct Variables : public FreeVariables,
-                   public boost::totally_ordered<Variables>
+struct Variables : public FreeVariables
 {
 	// CTors. The ordered flag indicates whether we care about the
 	// order of the variables. It is false by default and only enabled
@@ -73,17 +66,7 @@ struct Variables : public FreeVariables,
 	/// Unbundled variables and type restrictions for them.
 
 	/// _typemap holds back-ponters to TypedVariableLinkPtrs
-	/// _simple_typemap is the (possibly empty) list of restrictions
-	/// on the variable types. It holds a disjunction of class Type.
-	/// _deep_typemap holds complex or "deep" type definitions, such
-	/// as those defined by SignatureLink.
 	VariableTypeMap _typemap;
-	VariableSimpleTypeMap _simple_typemap;
-	VariableDeepTypeMap _deep_typemap;
-
-	/// To restrict how many atoms should be matched for each of the
-	/// GlobNodes in the pattern.
-	GlobIntervalMap _glob_intervalmap;
 
 	/// Anchor, if present, else undefined.
 	Handle _anchor;
@@ -165,8 +148,9 @@ struct Variables : public FreeVariables,
 	                  bool silent=false) const;
 
 	// Extend this by adding in the given variables. If either this or
-	// the other are ordered, then the result is ordered
+	// the other are ordered, then the result is ordered.
 	void extend(const Variables&);
+	void extend_intersect(const Variables&);
 
 	// Erase the given variable, if exist
 	void erase(const Handle&);
@@ -191,23 +175,10 @@ struct Variables : public FreeVariables,
 	void find_variables(const Handle& body);
 	void find_variables(const HandleSeq& oset, bool ordered_link=true);
 
-	const GlobInterval& get_interval(const Handle&) const;
+	const GlobInterval get_interval(const Handle&) const;
 
 	// Useful for debugging
 	std::string to_string(const std::string& indent=empty_string) const;
-
-protected:
-
-#define BOGUS_TYPE_CHECKING
-#ifdef BOGUS_TYPE_CHECKING
-	// XXX FIXME .. this is needed by the URE Unifier ...
-	// This code should be copied there.
-	bool is_type(VariableSimpleTypeMap::const_iterator,
-	             VariableDeepTypeMap::const_iterator,
-	             const Handle&) const;
-#endif
-
-	void extend_interval(const Handle &h, const Variables &vset);
 };
 
 // Debugging helpers see
@@ -215,11 +186,9 @@ protected:
 // The reason indent is not an optional argument with default is
 // because gdb doesn't support that, see
 // http://stackoverflow.com/questions/16734783 for more explanation.
-std::string oc_to_string(const VariableSimpleTypeMap& vtm,
+std::string oc_to_string(const VariableTypeMap&,
                          const std::string& indent=empty_string);
-std::string oc_to_string(const GlobIntervalMap& gim,
-                         const std::string& indent=empty_string);
-std::string oc_to_string(const Variables& var,
+std::string oc_to_string(const Variables&,
                          const std::string& indent=empty_string);
 
 /** @}*/

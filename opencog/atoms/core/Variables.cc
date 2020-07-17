@@ -1,5 +1,5 @@
 /*
- * atoms/core/Variables.cc
+ * opencog/atoms/core/Variables.cc
  *
  * Copyright (C) 2009, 2014, 2015 Linas Vepstas
  *               2019 SingularityNET Foundation
@@ -31,9 +31,8 @@
 #include <opencog/atoms/atom_types/NameServer.h>
 
 #include <opencog/atoms/core/DefineLink.h>
-#include <opencog/atoms/core/NumberNode.h>
 #include <opencog/atoms/core/TypedVariableLink.h>
-#include <opencog/atoms/core/TypeNode.h>
+#include <opencog/atoms/core/TypeIntersectionLink.h>
 #include <opencog/atoms/core/TypeUtils.h>
 
 #include "VariableSet.h"
@@ -80,23 +79,10 @@ void Variables::unpack_vartype(const Handle& htypelink)
 	const Handle& varname(tvlp->get_variable());
 	_typemap.insert({varname, tvlp});
 
-	const TypeSet& ts = tvlp->get_simple_typeset();
-	if (0 < ts.size())
-		_simple_typemap.insert({varname, ts});
-
-	const HandleSet& hs = tvlp->get_deep_typeset();
-	if (0 < hs.size())
-		_deep_typemap.insert({varname, hs});
-
-	const std::pair<size_t, size_t>& gi = tvlp->get_glob_interval();
-	if (tvlp->default_interval() != gi)
-		_glob_intervalmap.insert({varname, gi});
-
 	varset.insert(varname);
 	varseq.emplace_back(varname);
 }
 
-/* ================================================================= */
 /**
  * Validate variable declarations for syntax correctness.
  *
@@ -164,67 +150,47 @@ void Variables::validate_vardecl(const Handle& hdecls)
 	}
 }
 
-bool Variables::is_well_typed() const
+void Variables::validate_vardecl(const HandleSeq& oset)
 {
-	for (const auto& vt : _simple_typemap)
-		if (not opencog::is_well_typed(vt.second))
-			return false;
-	return true;
+	for (const Handle& h: oset)
+	{
+		Type t = h->get_type();
+		if (VARIABLE_NODE == t or GLOB_NODE == t)
+		{
+			varset.insert(h);
+			varseq.emplace_back(h);
+		}
+		else if (TYPED_VARIABLE_LINK == t)
+		{
+			unpack_vartype(h);
+		}
+		else if (ANCHOR_NODE == t)
+		{
+			_anchor = h;
+		}
+		else
+		{
+			throw InvalidParamException(TRACE_INFO,
+				"Expected a Variable or TypedVariable or Anchor, got: %s"
+				"\nVariableList is %s",
+					nameserver().getTypeName(t).c_str(),
+					to_string().c_str());
+		}
+	}
 }
 
 /* ================================================================= */
 
-/// Return true if the other Variables struct is equal to this one,
-/// up to alpha-conversion. That is, same number of variables, same
-/// type restrictions, but possibly different variable names.
-///
-/// This should give exactly the same answer as performing the tests
-///    this->is_type(other->varseq) and other->is_type(this->varseq)
-/// That is, the variables in this instance should have the same type
-/// restrictions as the variables in the other class.
-bool Variables::is_equal(const Variables& other) const
+void Variables::find_variables(const Handle& body)
 {
-	size_t sz = varseq.size();
-	if (other.varseq.size() != sz) return false;
-
-	if (other._ordered != _ordered) return false;
-
-	// Side-by-side comparison
-	for (size_t i = 0; i < sz; i++)
-	{
-		if (not is_equal(other, i))
-			return false;
-	}
-	return true;
+	FreeVariables::find_variables(body);
+	_ordered = false;
 }
 
-bool Variables::is_equal(const Variables& other, size_t index) const
+void Variables::find_variables(const HandleSeq& oset, bool ordered_link)
 {
-	const Handle& vme(varseq[index]);
-	const Handle& voth(other.varseq[index]);
-
-	// If one is a GlobNode, and the other a VariableNode,
-	// then its a mismatch.
-	if (vme->get_type() != voth->get_type()) return false;
-
-	// If typed, types must match.
-	auto sime = _typemap.find(vme);
-	auto soth = other._typemap.find(voth);
-	if (sime == _typemap.end() and
-	    soth != other._typemap.end() and
-	    not soth->second->is_untyped()) return false;
-
-	if (sime != _typemap.end())
-	{
-		if (soth == other._typemap.end() and
-		    sime->second->is_untyped()) return true;
-		if (soth == other._typemap.end()) return false;
-
-		if (not sime->second->is_equal(*soth->second)) return false;
-	}
-
-	// If we got to here, everything must be OK.
-	return true;
+	FreeVariables::find_variables(oset, ordered_link);
+	_ordered = false;
 }
 
 /* ================================================================= */
@@ -243,6 +209,14 @@ bool Variables::is_alpha_convertible(const Handle& var,
 	return other.index.end() != idx
 		and varseq.at(idx->second) == var
 		and (not check_type or is_equal(other, idx->second));
+}
+
+bool Variables::is_well_typed() const
+{
+	for (const auto& vt : _typemap)
+		if (not opencog::is_well_typed(vt.second->get_simple_typeset()))
+			return false;
+	return true;
 }
 
 /* ================================================================= */
@@ -270,78 +244,6 @@ bool Variables::is_type(const Handle& h) const
  * Returns true if we are holding the variable `var`, and if
  * the `val` satisfies the type restrictions that apply to `var`.
  */
-#ifdef BOGUS_TYPE_CHECKING
-// XXX FIXME -- The URE Variable Unifier needs this code to be the
-// way it is, to work  properly ... that is because it does weird stuff
-// with extened() ... unfortunately, this is a blocker for fixing
-// pattern engine bugs ... so this code needs to move there...
-bool Variables::is_type(const Handle& var, const Handle& val) const
-{
-	if (varset.end() == varset.find(var)) return false;
-
-	VariableSimpleTypeMap::const_iterator tit = _simple_typemap.find(var);
-	VariableDeepTypeMap::const_iterator dit = _deep_typemap.find(var);
-
-	const Arity num_args = val->get_type() != LIST_LINK ? 1 : val->get_arity();
-
-	// If one is allowed in interval then there are two alternatives.
-	// one: val must satisfy type restriction.
-	// two: val must be list_link and its unique outgoing satisfies
-	//      type restriction.
-	if (is_lower_bound(var, 1) and is_upper_bound(var, 1)
-	    and is_type(tit, dit, val))
-		return true;
-	else if (val->get_type() != LIST_LINK or
-	         not is_lower_bound(var, num_args) or
-	         not is_upper_bound(var, num_args))
-		// If the number of arguments is out of the allowed interval
-		// of the variable/glob or val is not List_link, return false.
-		return false;
-
-	// Every outgoing atom in list must satisfy type restriction of var.
-	for (size_t i = 0; i < num_args; i++)
-		if (!is_type(tit, dit, val->getOutgoingAtom(i)))
-			return false;
-
-	return true;
-}
-
-bool Variables::is_type(VariableSimpleTypeMap::const_iterator tit,
-                        VariableDeepTypeMap::const_iterator dit,
-                        const Handle& val) const
-{
-	bool ret = true;
-
-	// Simple type restrictions?
-	if (_simple_typemap.end() != tit)
-	{
-		const TypeSet &tchoice = tit->second;
-		Type htype = val->get_type();
-		TypeSet::const_iterator allow = tchoice.find(htype);
-
-		// If the argument has the simple type, then we are good to go;
-		// we are done.  Else, fall through, and see if one of the
-		// others accept the match.
-		if (allow != tchoice.end()) return true;
-		ret = false;
-	}
-
-	// Deep type restrictions?
-	if (_deep_typemap.end() != dit)
-	{
-		const HandleSet &sigset = dit->second;
-		for (const Handle& sig : sigset)
-		{
-			if (value_is_type(sig, val)) return true;
-		}
-		ret = false;
-	}
-
-	// There appear to be no type restrictions...
-	return ret;
-}
-
-#else // BOGUS_TYPE_CHECKING
 bool Variables::is_type(const Handle& var, const Handle& val) const
 {
 	// If not holding, then fail.
@@ -353,7 +255,6 @@ bool Variables::is_type(const Handle& var, const Handle& val) const
 
 	return tit->second->is_type(val);
 }
-#endif // BOGUS_TYPE_CHECKING
 
 /**
  * Return true if we contain just a single variable, and this one
@@ -444,14 +345,14 @@ static const GlobInterval& default_interval(Type t)
 			 var_def_interval;
 }
 
-const GlobInterval& Variables::get_interval(const Handle& var) const
+const GlobInterval Variables::get_interval(const Handle& var) const
 {
-	const auto& interval = _glob_intervalmap.find(var);
+	const auto& decl = _typemap.find(var);
 
-	if (interval == _glob_intervalmap.end())
+	if (decl == _typemap.end())
 		return default_interval(var->get_type());
 
-	return interval->second;
+	return decl->second->get_glob_interval();
 }
 
 /* ================================================================= */
@@ -552,33 +453,62 @@ Handle Variables::substitute(const Handle& func,
  *
  * That is, merge the given variables into this set.
  *
- * If a variable is both in *this and vset then its type intersection
+ * If a variable is both in *this and vset then its type union
  * is assigned to it.
  */
 void Variables::extend(const Variables& vset)
 {
 	for (const Handle& h : vset.varseq)
 	{
+		auto typemap_it = vset._typemap.find(h);
+		if (typemap_it != vset._typemap.end())
+			unpack_vartype(HandleCast(typemap_it->second));
+		else
+		{
+			varseq.emplace_back(h);
+			varset.insert(h);
+		}
+	}
+
+	// If either this or the other are ordered then the result is ordered
+	_ordered = _ordered or vset._ordered;
+}
+
+/**
+ * Extend a set of variables.
+ *
+ * That is, merge the given variables into this set.
+ *
+ * If a variable is both in *this and vset then its type intersection
+ * is assigned to it.
+ */
+void Variables::extend_intersect(const Variables& vset)
+{
+	for (const Handle& h : vset.varseq)
+	{
 		auto index_it = index.find(h);
 		if (index_it != index.end())
 		{
-#ifdef BOGUS_TYPE_CHECKING
 			// Merge the two typemaps, if needed.
-			auto stypemap_it = vset._simple_typemap.find(h);
-			if (stypemap_it != vset._simple_typemap.end())
+			auto vit = vset._typemap.find(h);
+			if (vit != vset._typemap.end())
 			{
-				const TypeSet& tms = stypemap_it->second;
-				auto tti = _simple_typemap.find(h);
-				if(tti != _simple_typemap.end())
-					tti->second = set_intersection(tti->second, tms);
+				auto tit = _typemap.find(h);
+				if (tit != _typemap.end())
+				{
+					Handle isect = HandleCast(
+						createTypeIntersectionLink(HandleSeq{
+							HandleCast(tit->second->get_typedecl()),
+							HandleCast(vit->second->get_typedecl())}));
+					TypedVariableLinkPtr tvp =
+						createTypedVariableLink(h, isect);
+					_typemap[h] = tvp;
+				}
 				else
-					_simple_typemap.insert({h, tms});
+				{
+					_typemap.insert({h, vit->second});
+				}
 			}
-#else
-			auto typemap_it = vset._typemap.find(h);
-			if (typemap_it != vset._typemap.end())
-				unpack_vartype(HandleCast(typemap_it->second));
-#endif // BOGUS_TYPE_CHECKING
 		}
 		else
 		{
@@ -587,55 +517,85 @@ void Variables::extend(const Variables& vset)
 
 			auto typemap_it = vset._typemap.find(h);
 			if (typemap_it != vset._typemap.end())
+			{
 				unpack_vartype(HandleCast(typemap_it->second));
+			}
 			else
 			{
 				varseq.emplace_back(h);
 				varset.insert(h);
 			}
 		}
-		// extend _glob_interval_map
-		extend_interval(h, vset);
 	}
 
 	// If either this or the other are ordered then the result is ordered
 	_ordered = _ordered or vset._ordered;
 }
 
-#ifdef BOGUS_TYPE_CHECKING
-inline GlobInterval interval_intersection(const GlobInterval &lhs,
-                                          const GlobInterval &rhs)
-{
-	const auto lb = std::max(lhs.first, rhs.first);
-	const auto ub = std::min(lhs.second, rhs.second);
-	return lb > ub ? GlobInterval{0, 0} : GlobInterval{lb, ub};
-}
-
-void Variables::extend_interval(const Handle &h, const Variables &vset)
-{
-	auto it = _glob_intervalmap.find(h);
-	auto is_in_gim = it != _glob_intervalmap.end();
-	const auto intersection = not is_in_gim ? vset.get_interval(h) :
-			interval_intersection(vset.get_interval(h), get_interval(h));
-	if (intersection != default_interval(h->get_type())) {
-		if (is_in_gim) it->second = intersection;
-		else _glob_intervalmap.insert({h, intersection});
-	}
-}
-#endif // BOGUS_TYPE_CHECKING
+/* ================================================================= */
 
 void Variables::erase(const Handle& var)
 {
 	// Remove from the type maps
 	_typemap.erase(var);
-	_simple_typemap.erase(var);
-	_deep_typemap.erase(var);
-
-	// Remove from the interval map
-	_glob_intervalmap.erase(var);
 
 	// Remove FreeVariables
 	FreeVariables::erase(var);
+}
+
+/* ================================================================= */
+
+/// Return true if the other Variables struct is equal to this one,
+/// up to alpha-conversion. That is, same number of variables, same
+/// type restrictions, but possibly different variable names.
+///
+/// This should give exactly the same answer as performing the tests
+///    this->is_type(other->varseq) and other->is_type(this->varseq)
+/// That is, the variables in this instance should have the same type
+/// restrictions as the variables in the other class.
+bool Variables::is_equal(const Variables& other) const
+{
+	size_t sz = varseq.size();
+	if (other.varseq.size() != sz) return false;
+
+	if (other._ordered != _ordered) return false;
+
+	// Side-by-side comparison
+	for (size_t i = 0; i < sz; i++)
+	{
+		if (not is_equal(other, i))
+			return false;
+	}
+	return true;
+}
+
+bool Variables::is_equal(const Variables& other, size_t index) const
+{
+	const Handle& vme(varseq[index]);
+	const Handle& voth(other.varseq[index]);
+
+	// If one is a GlobNode, and the other a VariableNode,
+	// then its a mismatch.
+	if (vme->get_type() != voth->get_type()) return false;
+
+	// If typed, types must match.
+	auto sime = _typemap.find(vme);
+	auto soth = other._typemap.find(voth);
+	if (sime == _typemap.end() and
+	    soth != other._typemap.end() and
+	    not soth->second->is_untyped()) return false;
+
+	if (sime != _typemap.end())
+	{
+		if (soth == other._typemap.end() and
+		    sime->second->is_untyped()) return true;
+		if (soth == other._typemap.end()) return false;
+
+		if (not sime->second->is_equal(*soth->second)) return false;
+	}
+
+	// If we got to here, everything must be OK.
+	return true;
 }
 
 bool Variables::operator==(const Variables& other) const
@@ -646,124 +606,45 @@ bool Variables::operator==(const Variables& other) const
 bool Variables::operator<(const Variables& other) const
 {
 	return FreeVariables::operator<(other)
-		or (_simple_typemap == other._simple_typemap
-		     and _deep_typemap < other._deep_typemap);
+		or _typemap < other._typemap;
 }
+
+/* ================================================================= */
 
 /// Look up the type declaration for `var`, but create the actual
 /// declaration for `alt`.  This is an alpha-renaming.
 Handle Variables::get_type_decl(const Handle& var, const Handle& alt) const
 {
-	HandleSeq types;
+	// Get the type info
+	const auto& tit = _typemap.find(var);
+	if (_typemap.end() == tit) return alt;
 
-	// Simple type info
-	const auto& sit = _simple_typemap.find(var);
-	if (sit != _simple_typemap.end())
-	{
-		for (Type t : sit->second)
-			types.push_back(Handle(createTypeNode(t)));
-	}
-
-	const auto& dit = _deep_typemap.find(var);
-	if (dit != _deep_typemap.end())
-	{
-		for (const Handle& sig: dit->second)
-			types.push_back(sig);
-	}
-
-	// Check if ill-typed a.k.a invalid type intersection.
-	if (types.empty() and sit != _simple_typemap.end())
-	{
-		const Handle ill_type = createLink(TYPE_CHOICE);
-		return createLink(TYPED_VARIABLE_LINK, alt, ill_type);
-	}
-
-	const auto interval = get_interval(var);
-	if (interval != default_interval(var->get_type()))
-	{
-		Handle il = createLink(INTERVAL_LINK,
-		                       Handle(createNumberNode(interval.first)),
-		                       Handle(createNumberNode(interval.second)));
-
-		if (types.empty())
-			return createLink(TYPED_VARIABLE_LINK, alt, il);
-
-		HandleSeq tcs;
-		for (Handle tn : types)
-			tcs.push_back(createLink(TYPE_SET_LINK, il, tn));
-		return tcs.size() == 1 ?
-		       createLink(TYPED_VARIABLE_LINK, alt, tcs[0]) :
-		       createLink(TYPED_VARIABLE_LINK, alt,
-		                  createLink(tcs, TYPE_CHOICE));
-	}
-
-	// No/Default interval found
-	if (not types.empty())
-	{
-		Handle types_h = types.size() == 1 ?
-		                 types[0] :
-		                 createLink(std::move(types), TYPE_CHOICE);
-		return createLink(TYPED_VARIABLE_LINK, alt, types_h);
-	}
-
-	// No type info
-	return alt;
+	return HandleCast(createTypedVariableLink(alt,
+		HandleCast(tit->second->get_typedecl())));
 }
 
 Handle Variables::get_vardecl() const
 {
 	HandleSeq vardecls;
 	for (const Handle& var : varseq)
-		vardecls.emplace_back(get_type_decl(var, var));
+	{
+		const auto& tit = _typemap.find(var);
+		if (_typemap.end() == tit)
+			vardecls.emplace_back(var);
+		else
+			vardecls.emplace_back(tit->second);
+	}
+
 	if (vardecls.size() == 1)
 		return vardecls[0];
 
 	if (_ordered)
-		return Handle(createVariableList(std::move(vardecls)));
+		return HandleCast(createVariableList(std::move(vardecls)));
 
-	return Handle(createVariableSet(std::move(vardecls)));
+	return HandleCast(createVariableSet(std::move(vardecls)));
 }
 
-void Variables::validate_vardecl(const HandleSeq& oset)
-{
-	for (const Handle& h: oset)
-	{
-		Type t = h->get_type();
-		if (VARIABLE_NODE == t or GLOB_NODE == t)
-		{
-			varset.insert(h);
-			varseq.emplace_back(h);
-		}
-		else if (TYPED_VARIABLE_LINK == t)
-		{
-			unpack_vartype(h);
-		}
-		else if (ANCHOR_NODE == t)
-		{
-			_anchor = h;
-		}
-		else
-		{
-			throw InvalidParamException(TRACE_INFO,
-				"Expected a Variable or TypedVariable or Anchor, got: %s"
-				"\nVariableList is %s",
-					nameserver().getTypeName(t).c_str(),
-					to_string().c_str());
-		}
-	}
-}
-
-void Variables::find_variables(const Handle& body)
-{
-	FreeVariables::find_variables(body);
-	_ordered = false;
-}
-
-void Variables::find_variables(const HandleSeq& oset, bool ordered_link)
-{
-	FreeVariables::find_variables(oset, ordered_link);
-	_ordered = false;
-}
+/* ================================================================= */
 
 std::string Variables::to_string(const std::string& indent) const
 {
@@ -775,62 +656,32 @@ std::string Variables::to_string(const std::string& indent) const
 	// Whether it is ordered
 	ss << indent << "_ordered = " << _ordered << std::endl;
 
-	// Simple typemap
-	std::string indent_p = indent + OC_TO_STRING_INDENT;
-	ss << indent << "_simple_typemap:" << std::endl
-	   << oc_to_string(_simple_typemap, indent_p) << std::endl;
-
-	// Glob interval map
-	ss << indent << "_glob_intervalmap:" << std::endl
-	   << oc_to_string(_glob_intervalmap, indent_p) << std::endl;
-
-	// Deep typemap
-	ss << indent << "_deep_typemap:" << std::endl
-	   << oc_to_string(_deep_typemap, indent_p);
+	// Typemap
+	ss << indent << "_typemap:" << std::endl
+	   << oc_to_string(_typemap, indent + OC_TO_STRING_INDENT);
 
 	return ss.str();
+}
+
+std::string oc_to_string(const VariableTypeMap& hmap, const std::string& indent)
+{
+	// Cut-n-paste of oc_to_string(const HandleMap& hmap)
+   std::stringstream ss;
+   ss << indent << "size = " << hmap.size();
+   int i = 0;
+   for (const auto& p : hmap) {
+      ss << std::endl << indent << "key[" << i << "]:" << std::endl
+         << oc_to_string(p.first, indent + OC_TO_STRING_INDENT) << std::endl
+         << indent << "value[" << i << "]:" << std::endl
+         << p.second->to_string(indent + OC_TO_STRING_INDENT);
+      i++;
+   }
+   return ss.str();
 }
 
 std::string oc_to_string(const Variables& var, const std::string& indent)
 {
 	return var.to_string(indent);
-}
-
-std::string oc_to_string(const VariableSimpleTypeMap& vtm,
-                         const std::string& indent)
-{
-	std::stringstream ss;
-	ss << indent << "size = " << vtm.size();
-	unsigned i = 0;
-	for (const auto& v : vtm)
-	{
-		ss << std::endl << indent << "variable[" << i << "]:" << std::endl
-		   << oc_to_string(v.first, indent + OC_TO_STRING_INDENT) << std::endl
-		   << indent << "types[" << i << "]:";
-		for (auto& t : v.second)
-			ss << " " << nameserver().getTypeName(t);
-		i++;
-	}
-	return ss.str();
-}
-
-std::string oc_to_string(const GlobIntervalMap& gim, const std::string& indent)
-{
-	std::stringstream ss;
-	ss << indent << "size = " << gim.size();
-	unsigned i = 0;
-	for (const auto& v : gim)
-	{
-		ss << std::endl << indent << "glob[" << i << "]:" << std::endl
-		   << oc_to_string(v.first, indent + OC_TO_STRING_INDENT) << std::endl
-		   << indent << "interval[" << i << "]: ";
-		double lo = v.second.first;
-		double up = v.second.second;
-		ss << ((0 <= lo and std::isfinite(lo)) ? "[" : "(") << lo << ", "
-		   << up << ((0 <= up and std::isfinite(up)) ? "]" : ")");
-		i++;
-	}
-	return ss.str();
 }
 
 } // ~namespace opencog
