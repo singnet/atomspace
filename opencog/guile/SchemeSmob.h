@@ -52,6 +52,7 @@ private:
 		COG_EXTEND      // callbacks into C++ code.
 	};
 
+	static bool server_mode;
 	static std::atomic_flag is_inited;
 	static void module_init(void*);
 	static void register_procs();
@@ -63,6 +64,7 @@ private:
 
 	// Initialization functions
 	static void init_smob_type(void);
+	static SCM ss_set_server_mode(SCM);
 
 	static int print_misc(SCM, SCM, scm_print_state *);
 	static SCM equalp_misc(SCM, SCM);
@@ -108,6 +110,7 @@ private:
 	// Property setters on atoms
 	static SCM ss_set_tv(SCM, SCM);
 	static SCM ss_set_value(SCM, SCM, SCM);
+	static SCM ss_set_values(SCM, SCM);
 	static SCM ss_inc_count(SCM, SCM);
 	static SCM ss_inc_value(SCM, SCM, SCM, SCM);
 
@@ -121,6 +124,7 @@ private:
 	static SCM ss_get_confidence(SCM);
 	static SCM ss_get_count(SCM);
 	static SCM ss_keys(SCM);
+	static SCM ss_keys_alist(SCM);
 	static SCM ss_value(SCM, SCM);
 	static SCM ss_incoming_set(SCM);
 	static SCM ss_incoming_size(SCM);
@@ -172,6 +176,7 @@ private:
 	// Misc utilities
 	static std::string to_string(SCM);
 	static std::string protom_to_string(SCM);
+	static std::string protom_to_server_string(SCM);
 	static std::string misc_to_string(SCM);
 	static TruthValuePtr get_tv_from_list(SCM);
 	static AtomSpace* get_as_from_list(SCM);
@@ -213,6 +218,7 @@ private:
 
 	static SCM atomspace_fluid;
 	static void ss_set_env_as(AtomSpace *);
+
 	SchemeSmob();
 public:
 	// This makes init publicly visible; needed for the guile module.

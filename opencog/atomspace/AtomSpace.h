@@ -37,11 +37,6 @@ class BasicSaveUTest;
 
 namespace opencog
 {
-const bool EMIT_DIAGNOSTICS = true;
-const bool DONT_EMIT_DIAGNOSTICS = false;
-const bool CHECK_VALUES = true;
-const bool DONT_CHECK_VALUES = false;
-
 /** \addtogroup grp_atomspace
  *  @{
  */
@@ -65,6 +60,12 @@ class AtomSpace
     friend class ::AtomSpaceUTest;
     friend class ::BasicSaveUTest;   // Needs to call get_atomtable()
 
+    // Debug tools
+    static const bool EMIT_DIAGNOSTICS = true;
+    static const bool DONT_EMIT_DIAGNOSTICS = false;
+    static const bool CHECK_VALUES = true;
+    static const bool DONT_CHECK_VALUES = false;
+
     /**
      * Drop copy constructor and equals operator to
      * prevent accidental copying of large objects.
@@ -73,6 +74,7 @@ class AtomSpace
     AtomSpace(const AtomSpace&) = delete;
 
     AtomTable _atom_table;
+
     /**
      * Used to fetch atoms from disk.
      */
@@ -475,6 +477,30 @@ public:
                                bool subclass=false) const
     {
         return _atom_table.getHandleSetByType(hset, type, subclass);
+    }
+
+    /**
+     * Gets a set of handles that matches with the given type,
+     * but ONLY if they have an empty incoming set! This might
+     * spend more time under the atomtable lock, but should use
+     * less RAM when getting large sets, and thus might be faster.
+     *
+     * @param hset the HandleSet into which to insert handles.
+     * @param type The desired type.
+     * @param subclass Whether type subclasses should be considered.
+     *
+     * Example of call to this method, which would return all ConceptNodes
+     * in the AtomSpace:
+     * @code
+     *         HandleSet atoms;
+     *         atomSpace.get_rootset_by_type(atoms, CONCEPT_NODE);
+     * @endcode
+     */
+    void get_rootset_by_type(HandleSet& hset,
+                             Type type,
+                             bool subclass=false) const
+    {
+        return _atom_table.getRootSetByType(hset, type, subclass);
     }
 
     /**

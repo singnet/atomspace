@@ -243,6 +243,8 @@ void SchemeSmob::module_init(void*)
 
 void SchemeSmob::register_procs()
 {
+	register_proc("cog-set-server-mode!",  1, 0, 0, C(ss_set_server_mode));
+
 	register_proc("cog-new-value",         1, 0, 1, C(ss_new_value));
 	register_proc("cog-new-atom",          1, 0, 1, C(ss_new_atom));
 	register_proc("cog-new-node",          2, 0, 1, C(ss_new_node));
@@ -271,6 +273,7 @@ void SchemeSmob::register_procs()
 
 	// Generic property setter on atoms
 	register_proc("cog-set-value!",        3, 0, 0, C(ss_set_value));
+	register_proc("cog-set-values!",       2, 0, 0, C(ss_set_values));
 
 	// TV property setters on atoms
 	register_proc("cog-set-tv!",           2, 0, 0, C(ss_set_tv));
@@ -290,6 +293,7 @@ void SchemeSmob::register_procs()
 	register_proc("cog-outgoing-by-type",  2, 0, 0, C(ss_outgoing_by_type));
 	register_proc("cog-outgoing-atom",     2, 0, 0, C(ss_outgoing_atom));
 	register_proc("cog-keys",              1, 0, 0, C(ss_keys));
+	register_proc("cog-keys->alist",       1, 0, 0, C(ss_keys_alist));
 	register_proc("cog-value",             2, 0, 0, C(ss_value));
 	register_proc("cog-tv",                1, 0, 0, C(ss_tv));
 	register_proc("cog-atomspace",         0, 0, 1, C(ss_as));

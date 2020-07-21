@@ -188,8 +188,8 @@
 "
  cog-delete! ATOM [ATOMSPACE]
     Remove the indicated ATOM, but only if it has no incoming links.
-    If it has incoming links, the remove fails.  If SQL or other data
-    storage is attached, the ATOM is also removed from the storage.
+    If it has incoming links, the remove fails.  If storage is attached,
+    the ATOM is also removed from the storage.
 
     Returns #t if the atom was removed, else returns #f if not removed.
 
@@ -746,6 +746,26 @@
                  (Concept \"abc\") (Predicate \"key\")
                  (FloatValue 1 2 3))
        guile> (cog-keys (Concept \"abc\"))
+
+    See also:
+       cog-keys->alist ATOM - return association list of keys+values
+       cog-value ATOM KEY - return a value for the given KEY
+")
+
+(set-procedure-property! cog-keys->alist 'documentation
+"
+ cog-keys->alist ATOM
+    Return an association list of all key-value pairs attached to ATOM.
+
+    Example:
+       guile> (cog-set-value!
+                 (Concept \"abc\") (Predicate \"key\")
+                 (FloatValue 1 2 3))
+       guile> (cog-keys->alist (Concept \"abc\"))
+
+    See also:
+       cog-keys ATOM - return list of all keys on ATOM
+       cog-value ATOM KEY - return a value for the given KEY
 ")
 
 (set-procedure-property! cog-value 'documentation
@@ -766,7 +786,9 @@
 "
  cog-set-value! ATOM KEY VALUE
     Set the value of KEY for ATOM to VALUE. Both ATOM and KEY must be
-    atoms.
+    atoms. The VALUE can be any Atomese Value, or #f or the empty list.
+    If it is #f or the empty list '(), then the KEY is removed from
+    the atom.
 
     Example:
        guile> (cog-set-value!
@@ -774,6 +796,41 @@
                  (FloatValue 1 2 3))
        guile> (cog-value (Concept \"abc\") (Predicate \"key\"))
        (FloatValue 1.000000 2.000000 3.00000)
+
+       guile> (cog-set-value!
+                 (Concept \"abc\") (Predicate \"key\") #f)
+       guile> (cog-value (Concept \"abc\") (Predicate \"key\"))
+       #f
+
+    See also: cog-set-values! ATOM ALIST - set multiple values.
+")
+
+(set-procedure-property! cog-set-values! 'documentation
+"
+ cog-set-values! ATOM ALIST
+    Set multiple values on ATOM from the key-value pairs in ALIST.
+    The ALIST must be an association list, of the form of
+    ((key1 . value1) (key2 . value2) ...)
+
+    Example:
+       guile> (cog-set-values!
+                 (Concept \"abc\")
+                 (list
+                    (cons (Predicate \"key1\") (FloatValue 1 2 3))
+                    (cons (Predicate \"key2\") (FloatValue 4 5 6))))
+       guile> (cog-keys->alist (Concept \"abc\"))
+
+    Keys can also be removed, by setting the value to #f or to '()
+
+    Example:
+       guile> (cog-set-values!
+                 (Concept \"abc\")
+                 (list
+                    (cons (Predicate \"key1\") #f)
+                    (cons (Predicate \"key2\") #f)))
+       guile> (cog-keys->alist (Concept \"abc\"))
+
+    See also: cog-set-value! ATOM KEY VALUE - set a single value
 ")
 
 (set-procedure-property! cog-value? 'documentation
@@ -1040,6 +1097,15 @@
 
      See also: cog-atomspace-ro! and cog-atomspace-rw! and
          cog-atomspace-readonly?,
+")
+
+(set-procedure-property! cog-set-server-mode! 'documentation
+"
+ cog-set-server-mode! BOOL
+     If BOOL is #t, then some server-freindly options are enabled,
+     including the high-precision printing of TruthValues. Otherwise,
+     human-friendly shell-evaluator style is used. The default is
+     false. Returns the previous setting.
 ")
 
 ;set-procedure-property! cog-yield 'documentation
