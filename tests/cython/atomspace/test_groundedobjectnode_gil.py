@@ -4,7 +4,7 @@ import unittest
 from opencog.atomspace import AtomSpace
 from opencog.utilities import initialize_opencog, finalize_opencog
 from opencog.type_constructors import *
-from opencog.scheme_wrapper import scheme_eval
+from opencog.scheme import scheme_eval
 
 
 class Point:

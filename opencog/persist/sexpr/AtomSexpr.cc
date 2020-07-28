@@ -115,10 +115,9 @@ static void get_node_name(const std::string& s, size_t& l, size_t& r,
 
 	// Scheme strings start and end with double-quote.
 	// Scheme symbols start with single-quote.
-	if (typeNode and s[l] != '\'')
-		throw std::runtime_error(
-				"Syntax error at line " + std::to_string(line_cnt) +
-				" Unexpected type name: >>" + s.substr(l, r-l+1) + "<< in " + s);
+	bool scm_symbol = false;
+	if (typeNode and s[l] == '\'')
+		scm_symbol = true;
 	else if (not typeNode and s[l] != '"')
 		throw std::runtime_error(
 			"Syntax error at line " + std::to_string(line_cnt) +
@@ -126,7 +125,7 @@ static void get_node_name(const std::string& s, size_t& l, size_t& r,
 
 	l++;
 	size_t p = l;
-	if (typeNode)
+	if (scm_symbol)
 		for (; p < r and (s[p] != '(' or s[p] != ' ' or s[p] != '\t' or s[p] != '\n'); p++);
 	else
 		for (; p < r and (s[p] != '"' or ((0 < p) and (s[p - 1] == '\\'))); p++);
@@ -201,13 +200,9 @@ Handle Sexpr::decode_atom(const std::string& s,
 		l1 = l;
 		r1 = r;
 		size_t l2;
-		if (namer.isA(atype, TYPE_NODE)) {
-			get_node_name(s, l1, r1, line_cnt, true);
-			l2 = r1;
-		} else {
-			get_node_name(s, l1, r1, line_cnt);
-			l2 = r1 + 1;   // step past trailing quote.
-		}
+		get_node_name(s, l1, r1, line_cnt, namer.isA(atype, TYPE_NODE));
+		l2 = r1;
+		if ('"' == s[l2]) l2++; // step past trailing quote.
 
 		const std::string name = s.substr(l1, r1-l1);
 		Handle h(createNode(atype, std::move(name)));
