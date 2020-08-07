@@ -30,12 +30,20 @@
 #include <opencog/atoms/execution/EvaluationLink.h>
 #include <opencog/atoms/value/LinkValue.h>
 #include <opencog/atomspace/AtomSpace.h>
+#include <opencog/atomspace/Transient.h>
 
 #include "JoinLink.h"
 
 using namespace opencog;
 
-static const bool TRANSIENT_SPACE = true;
+class DefaultJoinCallback : public JoinCallback
+{
+	IncomingSet get_incoming_set(const Handle& h)
+	{
+		return h->getIncomingSet();
+	}
+};
+
 
 void JoinLink::init(void)
 {
@@ -350,9 +358,10 @@ HandleSet JoinLink::principals(AtomSpace* as,
 
 	// If we are here, the expression had variables in it.
 	// Perform a search to ground those.
-	AtomSpace temp(as, TRANSIENT_SPACE);
-	Handle meet = temp.add_atom(_meet);
+	AtomSpace* temp = grab_transient_atomspace(as);
+	Handle meet = temp->add_atom(_meet);
 	ValuePtr vp = meet->execute();
+	release_transient_atomspace(temp);
 
 	// The MeetLink returned everything that the variables in the
 	// clause could ever be...
@@ -414,7 +423,8 @@ HandleSet JoinLink::principals(AtomSpace* as,
 /// Algorithmically: walk upwards from h and insert everything in
 /// it's incoming tree into the handle-set. This recursively walks to
 /// the top, till there is no more. Of course, this can get large.
-void JoinLink::principal_filter(HandleSet& containers,
+void JoinLink::principal_filter(Traverse& trav,
+                                HandleSet& containers,
                                 const Handle& h) const
 {
 	// Ignore type specifications, other containers!
@@ -426,9 +436,9 @@ void JoinLink::principal_filter(HandleSet& containers,
 
 	containers.insert(h);
 
-	IncomingSet is(h->getIncomingSet());
+	IncomingSet is(trav.jcb->get_incoming_set(h));
 	for (const Handle& ih: is)
-		principal_filter(containers, ih);
+		principal_filter(trav, containers, ih);
 }
 
 void JoinLink::principal_filter_map(Traverse& trav,
@@ -446,7 +456,7 @@ void JoinLink::principal_filter_map(Traverse& trav,
 	containers.insert(h);
 	trav.top_map.insert({h, base});
 
-	IncomingSet is(h->getIncomingSet());
+	IncomingSet is(trav.jcb->get_incoming_set(h));
 	for (const Handle& ih: is)
 		principal_filter_map(trav, base, containers, ih);
 }
@@ -467,7 +477,7 @@ HandleSet JoinLink::upper_set(AtomSpace* as, bool silent,
 	if (not _need_top_map)
 	{
 		for (const Handle& pr: princes)
-			principal_filter(containers, pr);
+			principal_filter(trav, containers, pr);
 	}
 	else
 	{
@@ -477,7 +487,7 @@ HandleSet JoinLink::upper_set(AtomSpace* as, bool silent,
 		for (size_t i=0; i<ncon; i++)
 		{
 			for (const Handle& prc: trav.join_map[i])
-				principal_filter(containers, prc);
+				principal_filter(trav, containers, prc);
 		}
 
 		// Named terms -- we need to build a lookup table,
@@ -571,22 +581,22 @@ HandleSet JoinLink::supremum(AtomSpace* as, bool silent,
 /// find_top() - walk upwards from `h` and insert topmost atoms into
 /// the container set.  This recursively walks to the top, until there
 /// is nothing more above.
-void JoinLink::find_top(HandleSet& containers, const Handle& h) const
+void JoinLink::find_top(Traverse& trav, const Handle& h) const
 {
 	// Ignore other containers!
 	Type t = h->get_type();
 	if (nameserver().isA(t, JOIN_LINK))
 		return;
 
-	IncomingSet is(h->getIncomingSet());
+	IncomingSet is(trav.jcb->get_incoming_set(h));
 	if (0 == is.size())
 	{
-		containers.insert(h);
+		trav.containers.insert(h);
 		return;
 	}
 
 	for (const Handle& ih: is)
-		find_top(containers, ih);
+		find_top(trav, ih);
 }
 
 /* ================================================================= */
@@ -595,16 +605,15 @@ void JoinLink::find_top(HandleSet& containers, const Handle& h) const
 /// term.  This include type constraints, as well as evaluatable
 /// terms that name the top variable.
 HandleSet JoinLink::constrain(AtomSpace* as, bool silent,
-                              Traverse& trav,
-                              const HandleSet& containers) const
+                              Traverse& trav) const
 {
 	HandleSet rejects;
 
 	AtomSpace* temp = nullptr;
 	if (0 < _top_clauses.size())
-		temp = new AtomSpace(as, TRANSIENT_SPACE);
+		temp = grab_transient_atomspace(as);
 
-	for (const Handle& h : containers)
+	for (const Handle& h : trav.containers)
 	{
 		// Weed out anything that is the wrong type
 		for (const Handle& toty : _top_types)
@@ -640,11 +649,11 @@ HandleSet JoinLink::constrain(AtomSpace* as, bool silent,
 			}
 		}
 	}
-	if (temp) delete temp;
+	if (temp) release_transient_atomspace(temp);
 
 	// Remove the rejects
 	HandleSet accept;
-	std::set_difference(containers.begin(), containers.end(),
+	std::set_difference(trav.containers.begin(), trav.containers.end(),
 	                    rejects.begin(), rejects.end(),
 	                    std::inserter(accept, accept.begin()));
 	return accept;
@@ -652,31 +661,33 @@ HandleSet JoinLink::constrain(AtomSpace* as, bool silent,
 
 /* ================================================================= */
 
-HandleSet JoinLink::container(AtomSpace* as, bool silent) const
+HandleSet JoinLink::container(AtomSpace* as, JoinCallback* jcb,
+                              bool silent) const
 {
 	Traverse trav;
-	HandleSet containers;
+	trav.jcb = jcb;
+
 	Type t = get_type();
 	if (MINIMAL_JOIN_LINK == t)
-		containers = supremum(as, silent, trav);
+		trav.containers = supremum(as, silent, trav);
 	else if (UPPER_SET_LINK == t)
-		containers = upper_set(as, silent, trav);
+		trav.containers = upper_set(as, silent, trav);
 	else if (MAXIMAL_JOIN_LINK == t)
 	{
 		HandleSet supset(supremum(as, silent, trav));
 		for (const Handle& h: supset)
-			find_top(containers, h);
-		if (0 == containers.size())
-			containers = supset;
+			find_top(trav, h);
+		if (0 == trav.containers.size())
+			trav.containers = supset;
 	}
 
 	// Apply constraints on the top type, if any
 	if (0 < _top_types.size() or 0 < _top_clauses.size())
-		containers = constrain(as, silent, trav, containers);
+		trav.containers = constrain(as, silent, trav);
 
 	// Perform the actual rewriting.
 	fixup_replacements(trav);
-	return replace(containers, trav);
+	return replace(trav);
 }
 
 /* ================================================================= */
@@ -684,13 +695,12 @@ HandleSet JoinLink::container(AtomSpace* as, bool silent) const
 /// Given a top-level set of containing links, perform
 /// replacements, substituting the bottom-most atoms as requested,
 /// while honoring all scoping and quoting.
-HandleSet JoinLink::replace(const HandleSet& containers,
-                            const Traverse& trav) const
+HandleSet JoinLink::replace(const Traverse& trav) const
 {
 	// Use the Replacement utility, so that all scoping and
 	// quoting is handled correctly.
 	HandleSet replaced;
-	for (const Handle& top: containers)
+	for (const Handle& top: trav.containers)
 	{
 		Handle rep = Replacement::replace_nocheck(top, trav.replace_map);
 		replaced.insert(rep);
@@ -701,11 +711,12 @@ HandleSet JoinLink::replace(const HandleSet& containers,
 
 /* ================================================================= */
 
-QueueValuePtr JoinLink::do_execute(AtomSpace* as, bool silent)
+QueueValuePtr JoinLink::do_execute(AtomSpace* as,
+                                   JoinCallback* jcb, bool silent)
 {
 	if (nullptr == as) as = _atom_space;
 
-	HandleSet hs = container(as, silent);
+	HandleSet hs = container(as, jcb, silent);
 
 	// XXX FIXME this is really dumb, using a queue and then
 	// copying things into it. Whatever. Fix this.
@@ -719,7 +730,13 @@ QueueValuePtr JoinLink::do_execute(AtomSpace* as, bool silent)
 
 ValuePtr JoinLink::execute(AtomSpace* as, bool silent)
 {
-	return do_execute(as, silent);
+	DefaultJoinCallback djcb;
+	return do_execute(as, &djcb, silent);
+}
+
+ValuePtr JoinLink::execute_cb(AtomSpace* as, JoinCallback* jcb)
+{
+	return do_execute(as, jcb, false);
 }
 
 DEFINE_LINK_FACTORY(JoinLink, JOIN_LINK)

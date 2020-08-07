@@ -21,24 +21,59 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 #include <opencog/atoms/base/Atom.h>
-#include <opencog/atoms/value/FloatValue.h>
+#include <opencog/atoms/value/ValueFactory.h>
 #include <opencog/atoms/value/LinkValue.h>
-#include <opencog/atoms/value/StringValue.h>
-#include <opencog/atoms/base/Valuation.h>
-#include <opencog/atoms/truthvalue/CountTruthValue.h>
-#include <opencog/atoms/truthvalue/SimpleTruthValue.h>
-#include <opencog/atoms/truthvalue/TruthValue.h>
+#include <opencog/atomspace/AtomSpace.h>
 
 #include "Sexpr.h"
 
 using namespace opencog;
 
 /* ================================================================== */
+/**
+ * Look for a type name, either of the form "ConceptNode" (wwith quotes)
+ * or 'ConceptNode (symbol) starting at location `pos` in `tna`.
+ * Return the type and update `pos` to point after the typename.
+ */
+Type Sexpr::decode_type(const std::string& tna, size_t& pos)
+{
+	// Advance past whitespace.
+	pos = tna.find_first_not_of(" \n\t", pos);
+	if (std::string::npos == pos)
+		throw SyntaxException(TRACE_INFO, "Bad Type >>%s<<",
+			tna.substr(pos).c_str());
+
+	// Advance to next whitespace.
+	size_t nos = tna.find_first_of(") \n\t", pos);
+	if (std::string::npos == nos)
+		nos = tna.size();
+
+	size_t sos = nos;
+	if ('\'' == tna[pos]) pos++;
+	if ('"' == tna[pos]) { pos++; sos--; }
+
+	Type t = nameserver().getType(tna.substr(pos, sos-pos));
+	if (NOTYPE == t)
+		throw SyntaxException(TRACE_INFO, "Unknown Type >>%s<<",
+			tna.substr(pos, sos-pos).c_str());
+
+	pos = nos;
+	return t;
+}
+
+/* ================================================================== */
 
 /**
- * Return a Value correspnding to the input string.
+ * Return a Value corresponding to the input string.
  * It is assumed the input string is encoded as a scheme string.
- * For example, `(FloatValue 1 2 3 4)`
+ * For example, `(FloatValue 1 2 3 4)` or more complex things:
+ * `(LinkValue (Concept "a") (FloatValue 1 2 3))`
+ *
+ * The `pos` should point at the open-paren of the value-string.
+ * Upon return, `pos` is updated to point at the matching closing paren.
+ *
+ * It is currently assumed that there is no whitespace between the
+ * open-paren, and the string encoding the value.
  *
  * XXX FIXME This needs to be fuzzed; it is very likely to crash
  * and/or contain bugs if it is given strings of unexpected formats.
@@ -47,10 +82,51 @@ ValuePtr Sexpr::decode_value(const std::string& stv, size_t& pos)
 {
 	size_t totlen = stv.size();
 
-#define LV "(LinkValue"
-	if (0 == stv.compare(pos, sizeof(LV)-1, LV))
+	// Skip past whitespace
+	pos = stv.find_first_not_of(" \n\t", pos);
+
+	// Special-case: Both #f and '() are used to denote "no value".
+	// This is commonly used to erase keys from atoms. So handle this
+	// first.
+	if (0 == stv.compare(pos, 2, "#f"))
 	{
-		size_t vos = pos + sizeof(LV)-1;
+		pos += 2;
+		return nullptr;
+	}
+	if (0 == stv.compare(pos, 3, "'()"))
+	{
+		pos += 3;
+		return nullptr;
+	}
+
+	// What kind of value is it?
+	// Increment pos by one to point just after the open-paren.
+	size_t vos = stv.find_first_of(" \n\t", ++pos);
+	if (std::string::npos == vos)
+		throw SyntaxException(TRACE_INFO, "Badly formatted Value %s",
+			stv.substr(pos).c_str());
+
+	Type vtype = nameserver().getType(stv.substr(pos, vos-pos));
+	if (NOTYPE == vtype)
+	{
+		if (0 == stv.compare(pos, 3, "stv"))
+			vtype = SIMPLE_TRUTH_VALUE;
+		else
+		if (0 == stv.compare(pos, 3, "ctv"))
+			vtype = COUNT_TRUTH_VALUE;
+		else
+		throw SyntaxException(TRACE_INFO, "Unknown Value >>%s<<",
+			stv.substr(pos, vos-pos).c_str());
+	}
+
+	if (nameserver().isA(vtype, ATOM))
+	{
+		// Decrement pos by one to point at the open-paren.
+		return decode_atom(stv, --pos);
+	}
+
+	if (nameserver().isA(vtype, LINK_VALUE))
+	{
 		std::vector<ValuePtr> vv;
 		vos = stv.find('(', vos);
 		size_t epos = vos;
@@ -79,13 +155,11 @@ ValuePtr Sexpr::decode_value(const std::string& stv, size_t& pos)
 			throw SyntaxException(TRACE_INFO,
 				"Malformed LinkValue: %s", stv.substr(pos).c_str());
 		pos = done + 1;
-		return createLinkValue(vv);
+		return valueserver().create(vtype, vv);
 	}
 
-#define FV "(FloatValue"
-	if (0 == stv.compare(pos, sizeof(FV)-1, FV))
+	if (nameserver().isA(vtype, FLOAT_VALUE))
 	{
-		size_t vos = pos + sizeof(FV)-1;
 		std::vector<double> fv;
 		while (vos < totlen and stv[vos] != ')')
 		{
@@ -94,57 +168,13 @@ ValuePtr Sexpr::decode_value(const std::string& stv, size_t& pos)
 			vos += epos;
 		}
 		pos = vos + 1;
-		return createFloatValue(fv);
-	}
 
-#define TVL "(SimpleTruthValue "
-#define TVS "(stv "
-	size_t vos = std::string::npos;
-	if (0 == stv.compare(pos, sizeof(TVL)-1, TVL))
-		vos = pos + sizeof(TVL) - 1;
-	else
-	if (0 == stv.compare(pos, sizeof(TVS)-1, TVS))
-		vos = pos + sizeof(TVS) - 1;
-
-	if (std::string::npos != vos)
-	{
-		size_t elen;
-		double strength = stod(stv.substr(vos), &elen);
-		vos += elen;
-		double confidence = stod(stv.substr(vos), &elen);
-		vos += elen;
-		vos = stv.find(')', vos);
-		if (std::string::npos == vos)
-			throw SyntaxException(TRACE_INFO,
-				"Malformed SimpleTruthValue: %s", stv.substr(pos).c_str());
-		pos = vos + 1;
-		return ValueCast(createSimpleTruthValue(strength, confidence));
-	}
-
-#define CTV "(CountTruthValue "
-	if (0 == stv.compare(pos, sizeof(CTV)-1, CTV))
-	{
-		size_t vos = pos + sizeof(CTV) - 1;
-		size_t elen;
-		double strength = stod(stv.substr(vos), &elen);
-		vos += elen;
-		double confidence = stod(stv.substr(vos), &elen);
-		vos += elen;
-		double count = stod(stv.substr(vos), &elen);
-		vos += elen;
-		vos = stv.find(')', vos);
-		if (std::string::npos == vos)
-			throw SyntaxException(TRACE_INFO,
-				"Malformed CountTruthValue: %s", stv.substr(pos).c_str());
-		pos = vos + 1;
-		return ValueCast(createCountTruthValue(strength, confidence, count));
+		return valueserver().create(vtype, fv);
 	}
 
 	// XXX FIXME this mishandles escaped quotes
-#define SV "(StringValue"
-	if (0 == stv.compare(pos, sizeof(SV)-1, SV))
+	if (nameserver().isA(vtype, STRING_VALUE))
 	{
-		size_t vos = pos + sizeof(SV) - 1;
 		std::vector<std::string> sv;
 		size_t epos = stv.find(')', vos+1);
 		if (std::string::npos == epos)
@@ -159,11 +189,11 @@ ValuePtr Sexpr::decode_value(const std::string& stv, size_t& pos)
 			vos = evos+1;
 		}
 		pos = epos + 1;
-		return createStringValue(sv);
+		return valueserver().create(vtype, sv);
 	}
 
-	throw SyntaxException(TRACE_INFO, "Unknown Value %s",
-		stv.substr(pos).c_str());
+	throw SyntaxException(TRACE_INFO, "Unsupported decode of Value %s",
+		stv.substr(pos, vos-pos).c_str());
 }
 
 /* ================================================================== */
@@ -174,21 +204,80 @@ ValuePtr Sexpr::decode_value(const std::string& stv, size_t& pos)
  * ((KEY . VALUE)(KEY2 . VALUE2)...)
  * Store the results as values on the atom.
  */
-void Sexpr::decode_alist(Handle& atom, const std::string& alist)
+void Sexpr::decode_alist(const Handle& atom,
+                         const std::string& alist, size_t& pos)
 {
+	AtomSpace* as = atom->getAtomSpace();
+
+	pos = alist.find_first_not_of(" \n\t", pos);
+	if (std::string::npos == pos) return;
+	if ('(' != alist[pos])
+		throw SyntaxException(TRACE_INFO, "Badly formed alist: %s",
+			alist.substr(pos).c_str());
+
 	// Skip over opening paren
-	size_t pos = 1;
+	pos++;
 	size_t totlen = alist.size();
 	pos = alist.find('(', pos);
 	while (std::string::npos != pos and pos < totlen)
 	{
 		++pos;  // over first paren of pair
 		Handle key(decode_atom(alist, pos));
+
 		pos = alist.find(" . ", pos);
 		pos += 3;
 		ValuePtr val(decode_value(alist, pos));
+
+		// Make sure all atoms have found a nice home.
+		if (as)
+		{
+			Handle hkey = as->add_atom(key);
+			if (hkey) key = hkey; // might be null, if `as` is read-only
+			val = add_atoms(as, val);
+		}
 		atom->setValue(key, val);
 		pos = alist.find('(', pos);
+	}
+}
+
+/* ================================================================== */
+
+/**
+ * Decode a Valuation association list.
+ * This list has the format
+ * (list (cons KEY VALUE)(cons KEY2 VALUE2)...)
+ * Store the results as values on the atom.
+ */
+void Sexpr::decode_slist(const Handle& atom,
+                         const std::string& alist, size_t& pos)
+{
+	AtomSpace* as = atom->getAtomSpace();
+
+	pos = alist.find_first_not_of(" \n\t", pos);
+	if (std::string::npos == pos) return;
+	if (alist.compare(pos, 5, "(list"))
+		throw SyntaxException(TRACE_INFO, "Badly formed alist: %s",
+			alist.substr(pos).c_str());
+
+	size_t totlen = alist.size();
+	pos = alist.find("(cons ", pos);
+	while (std::string::npos != pos and pos < totlen)
+	{
+		pos += 5;
+		pos = alist.find_first_not_of(" \n\t", pos);
+		Handle key(decode_atom(alist, pos));
+		pos++;
+		pos = alist.find_first_not_of(" \n\t", pos);
+		ValuePtr val(decode_value(alist, pos));
+		if (as)
+		{
+			// Make sure all atoms have found a nice home.
+			Handle hkey = as->add_atom(key);
+			if (hkey) key = hkey; // might be null, if `as` is read-only
+			val = add_atoms(as, val);
+		}
+		atom->setValue(key, val);
+		pos = alist.find("(cons ", pos);
 	}
 }
 
@@ -226,6 +315,9 @@ std::string Sexpr::encode_atom(const Handle& h)
 /// Convert value (or Atom) into a string.
 std::string Sexpr::encode_value(const ValuePtr& v)
 {
+	// Empty values are used to erase keys from atoms.
+	if (nullptr == v) return " #f";
+
 	if (nameserver().isA(v->get_type(), FLOAT_VALUE))
 	{
 		// The FloatValue to_string() print prints out a high-precision
@@ -255,6 +347,15 @@ std::string Sexpr::encode_atom_values(const Handle& h)
 	}
 	rv << ")";
 	return rv.str();
+}
+
+/* ================================================================== */
+
+/// Make sure that any Atoms appearing buried in the value have found
+/// a nice home to live in.
+ValuePtr Sexpr::add_atoms(AtomSpace* as, const ValuePtr& vptr)
+{
+	return as->add_atoms(vptr);
 }
 
 /* ============================= END OF FILE ================= */
