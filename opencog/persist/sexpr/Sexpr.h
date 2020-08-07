@@ -36,7 +36,7 @@ class Sexpr
 {
 public:
 	/// Decode the s-expression containing an atom, starting at
-	/// location `pos`. Return the Atom, and upate `pos` to point
+	/// location `pos`. Return the Atom, and update `pos` to point
 	/// just past the end of the trailing parenthesis.
 	static Handle decode_atom(const std::string& s, size_t& pos)
 	{
@@ -53,15 +53,26 @@ public:
 	}
 
 	static ValuePtr decode_value(const std::string&, size_t&);
-	static void decode_alist(Handle&, const std::string&);
+	static Type decode_type(const std::string& s, size_t& pos);
 
+	static void decode_slist(const Handle&, const std::string&, size_t&);
+	static void decode_alist(const Handle&, const std::string&, size_t&);
+	static void decode_alist(const Handle& h, const std::string& s) {
+		size_t junk = 0;
+		decode_alist(h, s, junk);
+	}
+
+	// -------------------------------------------
 	// API more suitable to very long, file-driven I/O.
 	static int get_next_expr(const std::string&,
                             size_t& l, size_t& r, size_t line_cnt);
 	static Handle decode_atom(const std::string& s,
                              size_t l, size_t r, size_t line_cnt);
 
+	static ValuePtr add_atoms(AtomSpace*, const ValuePtr&);
 
+	// -------------------------------------------
+	// Encoding functions
 	static std::string encode_atom(const Handle&);
 	static std::string encode_value(const ValuePtr&);
 	static std::string encode_atom_values(const Handle&);

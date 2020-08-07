@@ -40,9 +40,13 @@ private:
 	void init(void);
 
 	Handle fetch_atom(Handle);
+	Handle fetch_value(Handle, Handle);
 	Handle fetch_incoming_set(Handle);
 	Handle fetch_incoming_by_type(Handle, Type);
+	Handle fetch_query2(Handle, Handle);
+	Handle fetch_query4(Handle, Handle, Handle, bool);
 	Handle store_atom(Handle);
+	void store_value(Handle, Handle);
 	void load_type(Type);
 	void load_atomspace(void);
 	void store_atomspace(void);
@@ -79,12 +83,20 @@ void PersistSCM::init(void)
 {
 	define_scheme_primitive("fetch-atom",
 	             &PersistSCM::fetch_atom, this, "persist");
+	define_scheme_primitive("fetch-value",
+	             &PersistSCM::fetch_value, this, "persist");
 	define_scheme_primitive("fetch-incoming-set",
 	             &PersistSCM::fetch_incoming_set, this, "persist");
 	define_scheme_primitive("fetch-incoming-by-type",
 	             &PersistSCM::fetch_incoming_by_type, this, "persist");
+	define_scheme_primitive("fetch-query-2args",
+	             &PersistSCM::fetch_query2, this, "persist");
+	define_scheme_primitive("fetch-query-4args",
+	             &PersistSCM::fetch_query4, this, "persist");
 	define_scheme_primitive("store-atom",
 	             &PersistSCM::store_atom, this, "persist");
+	define_scheme_primitive("store-value",
+	             &PersistSCM::store_value, this, "persist");
 	define_scheme_primitive("load-atoms-of-type",
 	             &PersistSCM::load_type, this, "persist");
 	define_scheme_primitive("load-atomspace",
@@ -100,23 +112,39 @@ void PersistSCM::init(void)
 Handle PersistSCM::fetch_atom(Handle h)
 {
 	AtomSpace *as = SchemeSmob::ss_get_env_as("fetch-atom");
-	h = as->fetch_atom(h);
-	return h;
+	return as->fetch_atom(h);
+}
+
+Handle PersistSCM::fetch_value(Handle h, Handle key)
+{
+	AtomSpace *as = SchemeSmob::ss_get_env_as("fetch-value");
+	return as->fetch_value(h, key);
 }
 
 Handle PersistSCM::fetch_incoming_set(Handle h)
 {
 	// The "false" flag here means that the fetch is NOT recursive.
 	AtomSpace *as = SchemeSmob::ss_get_env_as("fetch-incoming-set");
-	h = as->fetch_incoming_set(h, false);
-	return h;
+	return as->fetch_incoming_set(h, false);
 }
 
 Handle PersistSCM::fetch_incoming_by_type(Handle h, Type t)
 {
 	AtomSpace *as = SchemeSmob::ss_get_env_as("fetch-incoming-by-type");
-	h = as->fetch_incoming_by_type(h, t);
-	return h;
+	return as->fetch_incoming_by_type(h, t);
+}
+
+Handle PersistSCM::fetch_query2(Handle query, Handle key)
+{
+	AtomSpace *as = SchemeSmob::ss_get_env_as("fetch-query");
+	return as->fetch_query(query, key, Handle::UNDEFINED, false);
+}
+
+Handle PersistSCM::fetch_query4(Handle query, Handle key,
+                                Handle meta, bool fresh)
+{
+	AtomSpace *as = SchemeSmob::ss_get_env_as("fetch-query");
+	return as->fetch_query(query, key, meta, fresh);
 }
 
 /**
@@ -128,6 +156,12 @@ Handle PersistSCM::store_atom(Handle h)
 	AtomSpace *as = SchemeSmob::ss_get_env_as("store-atom");
 	as->store_atom(h);
 	return h;
+}
+
+void PersistSCM::store_value(Handle h, Handle key)
+{
+	AtomSpace *as = SchemeSmob::ss_get_env_as("store-value");
+	as->store_value(h, key);
 }
 
 void PersistSCM::load_type(Type t)
