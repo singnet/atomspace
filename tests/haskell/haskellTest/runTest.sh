@@ -6,4 +6,5 @@ then
     stack test --extra-lib-dirs=${BIN_DIR}
 else
     echo "Can't run Haskell-Tests as root"
+    exit 1
 fi

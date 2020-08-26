@@ -47,10 +47,10 @@ jobs:
           command: cd build && make -j2
       - run:
           name: Build tests
-          command: cd build && make -j2 tests
+          command: cd build && chmod -R a+rwX . && sudo -u opencog make -j2 tests
       - run:
           name: Run tests
-          command: cd build && make -j2 test
+          command: cd build && sudo -u opencog make -j2 test
       - run:
           name: Install AtomSpace
           command: cd build && make -j2 install && ldconfig
