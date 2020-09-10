@@ -433,7 +433,7 @@ Handle Instantiator::walk_tree(const Handle& expr,
 		{
 			Type ht = h->get_type();
 			if (VARIABLE_NODE != ht and GLOB_NODE != ht)
-				_as->remove_atom(h, true);
+				_as->extract_atom(h, true);
 		}
 		return Handle::UNDEFINED;
 	}
@@ -638,11 +638,19 @@ ValuePtr Instantiator::instantiate(const Handle& expr,
 		return eolh->execute(_as, silent);
 	}
 
+	// ExecuteThreadedLinks
+	if (EXECUTE_THREADED_LINK == t)
+	{
+		// XXX Don't we need to plug in the vars, first!?
+		// Maybe this is just not tested?
+		return expr->execute(_as, silent);
+	}
+
 	// The thread-links are ambiguously executable/evaluatable.
 	if (nameserver().isA(t, PARALLEL_LINK))
 	{
 		// XXX Don't we need to plug in the vars, first!?
-		// Maybe this is just not tested?
+		// Yes, we do, but this is just not tested, right now.
 		return ValueCast(EvaluationLink::do_evaluate(_as, expr, silent));
 	}
 

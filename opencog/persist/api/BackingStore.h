@@ -1,5 +1,5 @@
 /*
- * opencog/atomspace/BackingStore.h
+ * opencog/persist/api/BackingStore.h
  *
  * Implements an interface class for client-server communitcations.
  *
@@ -26,6 +26,7 @@
 
 #include <opencog/util/exceptions.h>
 #include <opencog/atoms/base/Atom.h>
+#include <opencog/atoms/base/Node.h>
 
 namespace opencog
 {
@@ -52,6 +53,9 @@ namespace opencog
  */
 class BackingStore
 {
+	friend class BackingImplicator;
+	friend class BackingSatisfyingSet;
+	friend class BackingJoinCallback;
 	public:
 		virtual ~BackingStore() {}
 
@@ -193,10 +197,7 @@ class BackingStore
 		 */
 		virtual void runQuery(const Handle& query, const Handle& key,
 		                      const Handle& metadata_key = Handle::UNDEFINED,
-		                      bool fresh=false)
-		{
-			throw IOException(TRACE_INFO, "Not implemented!");
-		}
+		                      bool fresh=false);
 
 		/**
 		 * Fetch *all* Atoms of the given type, and place them into the
@@ -237,20 +238,32 @@ class BackingStore
 		 */
 		virtual void barrier() = 0;
 
-		/**
-		 * Register this backing store with the atomspace.
-		 */
-		void registerWith(AtomSpace*);
+	protected:
+		virtual void getIncomingSet(AtomSpace*, const Handle&);
+		virtual void doGetIncomingSet(AtomSpace*, const Handle&);
+		virtual void getIncomingByType(AtomSpace*, const Handle&, Type);
 
 		/**
-		 * Unregister this backing store with the atomspace.
+		 * Return a Link with the indicated type and outset,
+		 * if it exists; else return nullptr. The returned atom
+		 * will have all values attached to it, that the backing
+		 * store knows about.
+		 *
+		 * An implementation for this is required only for the default
+		 * runQuery() implementation; otherwise this is unused.
 		 */
-		void unregisterWith(AtomSpace*);
-
-		/**  Deprecated. Implement getAtom() instead. */
 		virtual Handle getLink(Type, const HandleSeq&) {
 			throw IOException(TRACE_INFO, "Implementation is buggy!");
 		}
+
+		/**
+		 * Return a Node with the indicated type and name, if it
+		 * exists; else return nullptr. The returned atom will have
+		 * all values attached to it, that the backing store knows
+		 * about.
+		 *
+		 * Unusued. Present for backwards-compatibility only.
+		 */
 		virtual Handle getNode(Type, const char *) {
 			throw IOException(TRACE_INFO, "Implementation is buggy!");
 		}

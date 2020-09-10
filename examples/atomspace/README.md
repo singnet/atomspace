@@ -69,10 +69,13 @@ be effective.
 * `logging.scm`        -- Using the cogutils logger.
 * `python.scm`         -- Mixing Python and Scheme together.
 * `execute.scm`        -- Callbacks written in python or scheme.
+* `threaded.scm`       -- Multi-threading in Atomese.
 * `parallel.scm`       -- Multi-threading in Atomese.
 * `except.scm`         -- Throwing and catching exceptions.
-* `persistence-sql.scm`-- Layering the AtomSpace on a "real" database.
-* `distributed-sql.scm`-- Distributed AtomSpace on multiple network nodes.
+* `persistence.scm`    -- Layering the AtomSpace on a "normal" database.
+* `persist-multi.scm`  -- Work with multiple databases/servers at once.
+* `distributed.scm`    -- Distributed AtomSpace on multiple network nodes.
+* `query-sql.scm`      -- Fetching sets of Atoms with queries.
 * `copy-on-write.scm`  -- Read-only AtomSpace, with r/w overlays.
 * `gperf.scm`          -- Some very crude performance measurements.
 
