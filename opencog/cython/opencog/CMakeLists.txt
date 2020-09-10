@@ -100,6 +100,7 @@ INSTALL (FILES
 	ptrvalue.pxd
 	grounded_object_node.pxd
 	PythonGroundedObject.h
+	logger.pxd
 	value_types.pxd
 	DESTINATION "include/opencog/cython/opencog"
 )
