@@ -74,6 +74,8 @@ void PersistSCM::init(void)
 	             &PersistSCM::sn_delete_recursive, "persist", false);
 	define_scheme_primitive("sn-barrier",
 	             &PersistSCM::sn_barrier, "persist", false);
+	define_scheme_primitive("sn-monitor",
+	             &PersistSCM::sn_monitor, "persist", false);
 
 	define_scheme_primitive("dflt-fetch-atom",
 	             &PersistSCM::dflt_fetch_atom, this, "persist", false);
@@ -103,26 +105,36 @@ void PersistSCM::init(void)
 	             &PersistSCM::dflt_delete_recursive, this, "persist", false);
 	define_scheme_primitive("dflt-barrier",
 	             &PersistSCM::dflt_barrier, this, "persist", false);
+	define_scheme_primitive("dflt-monitor",
+	             &PersistSCM::dflt_monitor, this, "persist", false);
 }
 
 // =====================================================================
 
 // South Texas Nuclear Project
 #define GET_STNP \
-	if (not nameserver().isA(hsn->get_type(), STORAGE_NODE)) \
+	if (not nameserver().isA(hsn->get_type(), STORAGE_NODE)) { \
 		throw RuntimeException(TRACE_INFO, \
 			"Expecting StorageNode, got %s", hsn->to_short_string().c_str()); \
+	} \
  \
 	StorageNodePtr stnp = StorageNodeCast(hsn); \
  \
 	/* The cast will fail, if the dynamic library that defines the type */ \
 	/* isn't loaded. This is the user's job. They can do it by saying */ \
 	/* (use-modules (opencog persist-foo) */ \
-	if (nullptr == stnp) \
+	if (nullptr == stnp) { \
+		if (hsn->get_type() == STORAGE_NODE) { \
+			throw RuntimeException(TRACE_INFO, \
+				"A StorageNode cannot be used directly; " \
+				"only it's sub-types provide the needed implementation!"); \
+		} \
 		throw RuntimeException(TRACE_INFO, \
 			"Not opened; please load module that defines %s\n" \
-			"Like so: (use-modules (persist-foo))", \
-			nameserver().getTypeName(hsn->get_type()).c_str());
+			"Like so: (use-modules (persist-foo))\n" \
+			"where `foo` is the module providing the node.", \
+			nameserver().getTypeName(hsn->get_type()).c_str()); \
+	}
 
 StorageNodePtr PersistSCM::_sn;
 
@@ -235,6 +247,12 @@ void PersistSCM::sn_barrier(Handle hsn)
 	stnp->barrier();
 }
 
+std::string PersistSCM::sn_monitor(Handle hsn)
+{
+	GET_STNP;
+	return stnp->monitor();
+}
+
 // =====================================================================
 
 #define CHECK \
@@ -330,6 +348,12 @@ void PersistSCM::dflt_barrier(void)
 {
 	CHECK;
 	_sn->barrier();
+}
+
+std::string PersistSCM::dflt_monitor(void)
+{
+	CHECK;
+	return _sn->monitor();
 }
 
 void opencog_persist_init(void)
